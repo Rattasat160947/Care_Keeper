@@ -1,73 +1,63 @@
 # Care Keeper
 
-Care Keeper is a Python-based graphical user interface for a health monitoring device. The application is designed to run on a Raspberry Pi and display vital sign measurements from connected medical sensors.
+Care Keeper is a Python / PySide6 graphical user interface for a Raspberry Pi based health monitoring device. The application reads patient information from a Thai ID card, displays vital sign measurements, and shows a measurement summary.
 
-## Project Overview
+## Current Workflow
 
-This project provides a GUI dashboard for monitoring and operating health measurement sensors, including:
+1. Scan Thai national ID card
+2. Show patient information
+3. Measure vital signs from the dashboard
+4. Review the summary page
 
-- Blood pressure
-- Heart rate
-- Blood oxygen saturation (SpO2)
+## Supported Measurements
+
+- Blood pressure: systolic / diastolic
+- Pulse from the blood pressure monitor
+- Blood oxygen saturation: SpO2
 - Body temperature
 - Battery status
-- Wi-Fi / connection status
+- Wi-Fi status
+- Bluetooth status
 
-The intended workflow is for the user to start sensor measurement from the dashboard, view the live results, and navigate to a summary page that displays the collected measurement results.
-
-## Main Features
-
-- Dashboard for displaying device and sensor status
-- Sensor activation controls
-- Measurement result display
-- Battery status display
-- Wi-Fi / connectivity status display
-- Settings access for Raspberry Pi configuration
-- Summary page for completed health measurements
-
-## Project Structure
+## Application Files
 
 ```text
 Care_Keeper/
-├── main.py              # Application entry point
-├── gui.py               # Generated Python UI file
-├── main_GUI.ui          # Qt Designer UI file
-├── requirement.txt      # Python package requirements
-├── BP.py                # Blood pressure test script
-├── H59_BLE.py           # Heart rate and SpO2 BLE test script
-├── battery.py           # Battery / UPS test script
-├── ble_scaner.py        # BLE scanner script
-├── idcard.py            # Thai ID card test script
-└── lib/
-    ├── bp_monitor.py    # Blood pressure monitor module
-    ├── ups.py           # UPS / battery module
-    ├── h59_ble/         # BLE health sensor modules
-    └── thaiidcard/      # Thai ID card reader modules
++-- main_demo.py             # Runs the GUI with mock data for UI preview
++-- main_real.py             # Runs the GUI with real hardware providers
++-- carekeeper_ui.py         # Main PySide6 GUI
++-- carekeeper_providers.py  # Mock and real data providers
++-- requirement.txt          # Python dependencies
++-- BP.py                    # Standalone blood pressure test script
++-- H59_BLE.py               # Standalone BLE SpO2 / heart-rate test script
++-- battery.py               # Standalone UPS / battery test script
++-- ble_scaner.py            # BLE scanner script
++-- idcard.py                # Standalone Thai ID card test script
++-- lib/
+    +-- bp_monitor.py        # Blood pressure monitor module
+    +-- ups.py               # UPS / battery module
+    +-- h59_ble/             # H59 BLE sensor modules
+    +-- thaiidcard/          # Thai ID card reader modules
 ```
 
-## Requirements
+## Python Setup
 
-- Python 3.11 or newer
-- Raspberry Pi for hardware operation
-- Bluetooth support for BLE sensors
-- Serial connection for the blood pressure monitor
-- I2C support for UPS / battery status
-- Smart card reader support, if using the Thai ID card module
-
-## Installation
-
-Create and activate a Python virtual environment:
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
 ```
 
-On Windows PowerShell:
+Activate it on Windows PowerShell:
 
 ```powershell
-python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+```
+
+Activate it on Raspberry Pi / Linux:
+
+```bash
+source .venv/bin/activate
 ```
 
 Install Python dependencies:
@@ -76,56 +66,82 @@ Install Python dependencies:
 pip install -r requirement.txt
 ```
 
+## Run Mock UI
+
+Use this mode while designing or testing the interface without connected hardware:
+
+```bash
+python main_demo.py
+```
+
+This mode uses `MockCareKeeperProvider` and generates sample patient data and vital signs.
+
+## Run With Real Hardware
+
+Use this mode on the Raspberry Pi after connecting the required devices:
+
+```bash
+python main_real.py
+```
+
+This mode uses `RealCareKeeperProvider`. It does not generate fake measurement values. If a device is missing or cannot be read, the GUI will show an error message.
+
 ## Raspberry Pi System Packages
 
-Some hardware features require system packages on Raspberry Pi:
+Install system packages required by the hardware modules:
 
 ```bash
 sudo apt update
 sudo apt install python3-smbus i2c-tools bluetooth bluez pcscd libpcsclite-dev
 ```
 
-The user may also need permission to access serial, Bluetooth, and I2C devices:
+Add the current user to hardware access groups:
 
 ```bash
 sudo usermod -aG dialout,bluetooth,i2c $USER
 ```
 
-Reboot the Raspberry Pi after changing user groups:
+Reboot after changing groups:
 
 ```bash
 sudo reboot
 ```
 
-## Running the Application
+## Hardware Configuration
 
-Run the main GUI application:
+The real provider reads optional environment variables:
 
 ```bash
-python main.py
+export BP_PORT=/dev/ttyUSB0
+export H59_DEVICE_NAME=H59_D105
+export H59_DEVICE_ADDRESS=EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D
 ```
 
-## Hardware Test Scripts
+Defaults are already set in `carekeeper_providers.py`, but these variables are useful if the serial port or BLE device changes.
 
-The project includes separate scripts for testing individual hardware modules:
+## Hardware Notes
+
+- Thai ID card data is read through `lib/thaiidcard/card.py`.
+- Blood pressure is read through `lib/bp_monitor.py`.
+- SpO2 is read through the H59 BLE module in `lib/h59_ble/`.
+- Battery percentage is read through `lib/ups.py`.
+- Temperature currently has a placeholder in the real provider and must be connected to the actual temperature sensor module before real temperature measurement is available.
+
+## Standalone Hardware Tests
+
+Run these scripts to test hardware modules separately before using the full GUI:
 
 ```bash
+python idcard.py
 python BP.py
 python H59_BLE.py
 python battery.py
 python ble_scaner.py
-python idcard.py
 ```
-
-These scripts are intended for development and hardware verification before integrating the sensors into the main GUI workflow.
 
 ## Development Notes
 
-- The current GUI is generated from `main_GUI.ui`.
-- If the UI is edited in Qt Designer, `gui.py` should be regenerated from the updated `.ui` file.
-- Hardware-related modules may not work correctly on a normal Windows development machine because they require Raspberry Pi interfaces or connected external devices.
-- The GUI can be developed and tested separately from the hardware by running `main.py`.
-
-## Project Goal
-
-The goal of this project is to provide a simple and accessible interface for operating a Raspberry Pi-based health monitoring device. The system should allow users to start measurements, view current health values, check device status, and review a summarized result page after measurement is complete.
+- UI layout and styling are in `carekeeper_ui.py`.
+- Data access is separated into `carekeeper_providers.py`.
+- Use `main_demo.py` for interface development.
+- Use `main_real.py` only when the Raspberry Pi and hardware sensors are connected.
