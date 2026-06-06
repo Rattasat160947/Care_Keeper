@@ -1,0 +1,862 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+import sys
+from dataclasses import dataclass
+from typing import Callable
+
+from PySide6.QtCore import QThread, QTimer, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPen, QBrush
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from carekeeper_providers import (
+    BloodPressureReading,
+    CareKeeperProvider,
+    DeviceStatus,
+    PatientInfo,
+)
+
+
+WINDOW_WIDTH = 1010
+WINDOW_HEIGHT = 503
+
+
+@dataclass
+class VitalState:
+    systolic: int | None = None
+    diastolic: int | None = None
+    pulse: int | None = None
+    spo2: int | None = None
+    temperature: float | None = None
+
+
+class ProviderTask(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, action: Callable[[], object], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.action = action
+
+    def run(self) -> None:
+        try:
+            self.completed.emit(self.action())
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class WifiIndicator(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.connected = False
+        self.setFixedSize(26, 20)
+
+    def set_connected(self, connected: bool) -> None:
+        self.connected = connected
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        color = QColor("#0f8b8d") if self.connected else QColor("#cbd5e1")
+        cx = self.width() / 2
+        cy = self.height() - 3
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(color))
+        painter.drawEllipse(cx - 1.5, cy - 1.5, 3, 3)
+
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(color, 2.0, Qt.SolidLine, Qt.RoundCap))
+        for radius, span in ((4, 75), (8, 75), (12, 75)):
+            start_angle = int((90 - span / 2) * 16)
+            painter.drawArc(cx - radius, cy - radius, radius * 2, radius * 2, start_angle, span * 16)
+
+
+class BluetoothIndicator(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.connected = False
+        self.setFixedSize(20, 20)
+
+    def set_connected(self, connected: bool) -> None:
+        self.connected = connected
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        color = QColor("#0f8b8d") if self.connected else QColor("#cbd5e1")
+        painter.setPen(QPen(color, 1.8, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.drawLine(10, 3, 10, 17)
+        painter.drawLine(10, 3, 15, 7)
+        painter.drawLine(15, 7, 5, 14)
+        painter.drawLine(10, 17, 15, 13)
+        painter.drawLine(15, 13, 5, 6)
+
+
+class BatteryIndicator(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.percent = 0
+        self.setFixedSize(30, 15)
+
+    def set_percent(self, percent: int) -> None:
+        self.percent = max(0, min(100, percent))
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        border = QColor("#16324f")
+        fill = QColor("#0f8b8d") if self.percent > 20 else QColor("#94a3b8")
+        painter.setPen(QPen(border, 1.2))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(1, 1, 24, 13, 3, 3)
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(border))
+        painter.drawRoundedRect(26, 4, 2, 6, 1, 1)
+
+        fill_width = int((self.percent / 100) * 20)
+        if fill_width:
+            painter.setBrush(QBrush(fill))
+            painter.drawRoundedRect(3, 3, fill_width, 9, 1.5, 1.5)
+
+
+class CareKeeperWindow(QMainWindow):
+    def __init__(self, provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
+        super().__init__()
+        self.provider = provider
+        self.mode_name = mode_name
+        self.patient = PatientInfo()
+        self.vitals = VitalState()
+        self.tasks: list[ProviderTask] = []
+        self.status_task: ProviderTask | None = None
+        self.bp_cooldown_seconds = 0
+
+        self.setWindowTitle(f"CareKeeper - {mode_name}")
+        self.setFixedSize(WINDOW_WIDTH, WINDOW_HEIGHT)
+
+        self.stack = QStackedWidget()
+        self.setCentralWidget(self.stack)
+
+        self._build_scan_page()
+        self._build_dashboard_page()
+        self._build_summary_page()
+        self._apply_styles()
+        self._refresh_patient()
+        self._refresh_values()
+
+        self.status_timer = QTimer(self)
+        self.status_timer.timeout.connect(self._request_device_status)
+        self.status_timer.start(6000)
+        self._request_device_status()
+
+        self.cooldown_timer = QTimer(self)
+        self.cooldown_timer.timeout.connect(self._bp_cooldown_tick)
+
+    def _add_soft_shadow(self, widget: QWidget) -> None:
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(24)
+        shadow.setColor(QColor(15, 23, 42, 18))
+        shadow.setOffset(0, 6)
+        widget.setGraphicsEffect(shadow)
+
+    def _make_card(self, object_name: str = "Card") -> tuple[QFrame, QVBoxLayout]:
+        card = QFrame()
+        card.setObjectName(object_name)
+        self._add_soft_shadow(card)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(0)
+        return card, layout
+
+    def _build_scan_page(self) -> None:
+        root = QWidget()
+        root.setObjectName("RootBg")
+        outer = QVBoxLayout(root)
+        outer.setContentsMargins(20, 20, 20, 20)
+        outer.setAlignment(Qt.AlignCenter)
+
+        card, layout = self._make_card("WelcomeCard")
+        card.setFixedSize(540, 360)
+        layout.setContentsMargins(50, 45, 50, 45)
+        layout.setAlignment(Qt.AlignCenter)
+
+        logo = QLabel("CareKeeper")
+        logo.setObjectName("WelcomeLogo")
+        logo.setAlignment(Qt.AlignCenter)
+
+        title = QLabel("กรุณาสแกนบัตรประชาชน")
+        title.setObjectName("WelcomeTitle")
+        title.setAlignment(Qt.AlignCenter)
+
+        subtitle = QLabel("ระบบจะอ่านข้อมูลผู้รับบริการเพื่อยืนยันตัวตนก่อนตรวจร่างกาย")
+        subtitle.setObjectName("WelcomeSub")
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setWordWrap(True)
+
+        self.btn_card = QPushButton("เริ่มอ่านข้อมูลบัตร")
+        self.btn_card.setObjectName("BtnWelcomeAction")
+        self.btn_card.setFixedHeight(52)
+        self.btn_card.clicked.connect(self._read_card)
+
+        layout.addWidget(logo)
+        layout.addSpacing(18)
+        layout.addWidget(title)
+        layout.addSpacing(8)
+        layout.addWidget(subtitle)
+        layout.addSpacing(35)
+        layout.addWidget(self.btn_card)
+
+        outer.addWidget(card)
+        self.stack.addWidget(root)
+
+    def _build_dashboard_page(self) -> None:
+        root = QWidget()
+        root.setObjectName("RootBg")
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        layout.addWidget(self._build_patient_header(summary=False))
+
+        grid = QGridLayout()
+        grid.setSpacing(12)
+
+        bp_card, bp = self._make_card()
+        bp.addWidget(self._tag("ความดันโลหิต (BLOOD PRESSURE)"))
+        bp.addSpacing(12)
+        self.lbl_bp_value = self._value_label("-- / --", "ValueBP")
+        bp.addWidget(self.lbl_bp_value)
+        bp.addWidget(self._unit("mmHg"))
+        bp.addSpacing(6)
+        bp.addWidget(self._tag("ชีพจร (PULSE)"))
+        self.lbl_pulse_value = self._value_label("--", "ValuePulse")
+        bp.addWidget(self.lbl_pulse_value)
+        bp.addWidget(self._unit("bpm"))
+        bp.addStretch()
+        self.btn_bp = self._measure_button("วัดความดัน")
+        self.btn_bp.clicked.connect(self._measure_bp)
+        bp.addWidget(self.btn_bp)
+
+        spo2_card, spo2 = self._make_card()
+        spo2.addWidget(self._tag("ออกซิเจนในเลือด (SpO2)"))
+        spo2.addSpacing(12)
+        self.lbl_spo2_value = self._value_label("--", "ValueSpO2")
+        spo2.addWidget(self.lbl_spo2_value)
+        spo2.addWidget(self._unit("% oxygen saturation"))
+        spo2.addStretch()
+        self.btn_spo2 = self._measure_button("วัดออกซิเจน")
+        self.btn_spo2.clicked.connect(self._measure_spo2)
+        spo2.addWidget(self.btn_spo2)
+
+        temp_card, temp = self._make_card()
+        temp.addWidget(self._tag("อุณหภูมิร่างกาย (TEMPERATURE)"))
+        temp.addSpacing(12)
+        self.lbl_temp_value = self._value_label("--", "ValueTemp")
+        temp.addWidget(self.lbl_temp_value)
+        temp.addWidget(self._unit("°C"))
+        temp.addStretch()
+        self.btn_temp = self._measure_button("วัดอุณหภูมิ")
+        self.btn_temp.clicked.connect(self._measure_temperature)
+        temp.addWidget(self.btn_temp)
+
+        grid.addWidget(bp_card, 0, 0)
+        grid.addWidget(spo2_card, 0, 1)
+        grid.addWidget(temp_card, 0, 2)
+        layout.addLayout(grid)
+        layout.addSpacing(5)
+
+        self.btn_summary = QPushButton("วัดค่าอย่างน้อย 1 รายการก่อน")
+        self.btn_summary.setObjectName("BtnSummaryDisabled")
+        self.btn_summary.setFixedHeight(45)
+        self.btn_summary.setEnabled(False)
+        self.btn_summary.clicked.connect(self._show_summary)
+        layout.addWidget(self.btn_summary)
+
+        self.stack.addWidget(root)
+
+    def _build_summary_page(self) -> None:
+        root = QWidget()
+        root.setObjectName("RootBg")
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        layout.addWidget(self._build_patient_header(summary=True))
+
+        title = QLabel("สรุปผลการวัด")
+        title.setObjectName("SumTitle")
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(12)
+
+        bp_card, self.sum_bp_value, self.sum_pulse_value, self.sum_bp_badge = self._summary_card(
+            "ความดันโลหิต (BLOOD PRESSURE)",
+            "mmHg",
+            "ValueBP",
+            has_pulse=True,
+        )
+        spo2_card, self.sum_spo2_value, _, self.sum_spo2_badge = self._summary_card(
+            "ออกซิเจนในเลือด (SpO2)",
+            "% oxygen saturation",
+            "ValueSpO2",
+        )
+        temp_card, self.sum_temp_value, _, self.sum_temp_badge = self._summary_card(
+            "อุณหภูมิร่างกาย (TEMPERATURE)",
+            "°C",
+            "ValueTemp",
+        )
+
+        grid.addWidget(bp_card, 0, 0)
+        grid.addWidget(spo2_card, 0, 1)
+        grid.addWidget(temp_card, 0, 2)
+        layout.addLayout(grid)
+
+        btn_finish = QPushButton("เสร็จสิ้นการตรวจ")
+        btn_finish.setObjectName("BtnFinish")
+        btn_finish.setFixedHeight(44)
+        btn_finish.clicked.connect(self._reset_session)
+        layout.addSpacing(4)
+        layout.addWidget(btn_finish)
+
+        self.stack.addWidget(root)
+
+    def _build_patient_header(self, summary: bool) -> QFrame:
+        header = QFrame()
+        header.setObjectName("Header")
+        self._add_soft_shadow(header)
+
+        row = QHBoxLayout(header)
+        row.setContentsMargins(20, 14, 20, 14)
+        row.setSpacing(12)
+
+        patient_col = QVBoxLayout()
+        patient_col.setSpacing(3)
+
+        lbl_name = QLabel("ผู้รับบริการ: -")
+        lbl_cid = QLabel("เลขบัตร: -")
+        lbl_dob = QLabel("วันเกิด: -")
+        lbl_address = QLabel("ที่อยู่: -")
+        lbl_name.setObjectName("HeaderName")
+        lbl_cid.setObjectName("HeaderSub")
+        lbl_dob.setObjectName("HeaderSub")
+        lbl_address.setObjectName("HeaderAddress")
+
+        for label in (lbl_name, lbl_cid, lbl_dob, lbl_address):
+            label.setWordWrap(True)
+            patient_col.addWidget(label)
+
+        row.addLayout(patient_col, 1)
+
+        if summary:
+            self.sum_lbl_name = lbl_name
+            self.sum_lbl_cid = lbl_cid
+            self.sum_lbl_dob = lbl_dob
+            self.sum_lbl_address = lbl_address
+
+            btn_back = QPushButton("วัดซ้ำ")
+            btn_back.setObjectName("BtnSecondary")
+            btn_back.setFixedSize(100, 36)
+            btn_back.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+            row.addWidget(btn_back, alignment=Qt.AlignRight | Qt.AlignTop)
+            return header
+
+        self.lbl_name = lbl_name
+        self.lbl_cid = lbl_cid
+        self.lbl_dob = lbl_dob
+        self.lbl_address = lbl_address
+
+        status_row = QHBoxLayout()
+        status_row.setSpacing(8)
+        status_row.setAlignment(Qt.AlignVCenter)
+
+        self.bluetooth_indicator = BluetoothIndicator()
+        self.wifi_indicator = WifiIndicator()
+        self.battery_indicator = BatteryIndicator()
+        self.lbl_battery_text = QLabel("0%")
+        self.lbl_battery_text.setObjectName("BatteryLabel")
+
+        status_row.addWidget(self.bluetooth_indicator)
+        status_row.addWidget(self.wifi_indicator)
+        status_row.addSpacing(4)
+        status_row.addWidget(self.lbl_battery_text)
+        status_row.addWidget(self.battery_indicator)
+        row.addLayout(status_row)
+        return header
+
+    def _summary_card(
+        self,
+        title: str,
+        unit: str,
+        value_object_name: str,
+        has_pulse: bool = False,
+    ) -> tuple[QFrame, QLabel, QLabel | None, QLabel]:
+        card, layout = self._make_card()
+        title_label = self._tag(title)
+        title_label.setFixedHeight(26)
+        layout.addWidget(title_label)
+        layout.addSpacing(2)
+        value = self._value_label("--", value_object_name)
+        value.setFixedHeight(58)
+        layout.addWidget(value)
+        unit_label = self._unit(unit)
+        unit_label.setFixedHeight(20)
+        layout.addWidget(unit_label)
+
+        pulse_label = None
+        if has_pulse:
+            layout.addSpacing(2)
+            pulse_title = self._tag("ชีพจร (PULSE)")
+            pulse_title.setFixedHeight(26)
+            layout.addWidget(pulse_title)
+            pulse_label = self._value_label("--", "ValuePulse")
+            pulse_label.setFixedHeight(38)
+            layout.addWidget(pulse_label)
+            pulse_unit = self._unit("bpm")
+            pulse_unit.setFixedHeight(20)
+            layout.addWidget(pulse_unit)
+
+        layout.addStretch()
+        badge = QLabel("ยังไม่มีข้อมูล")
+        badge.setObjectName("StatusBadge")
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(30)
+        layout.addWidget(badge)
+        return card, value, pulse_label, badge
+
+    def _tag(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("CardTag")
+        label.setWordWrap(True)
+        label.setFixedHeight(30)
+        label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        return label
+
+    def _unit(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("CardUnit")
+        label.setFixedHeight(24)
+        label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        return label
+
+    def _value_label(self, text: str, object_name: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        label.setFixedHeight(44 if object_name == "ValuePulse" else 68)
+        label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        return label
+
+    def _measure_button(self, text: str) -> QPushButton:
+        button = QPushButton(text)
+        button.setObjectName("BtnMeasureBase")
+        button.setFixedHeight(36)
+        return button
+
+    def _start_task(
+        self,
+        action: Callable[[], object],
+        on_success: Callable[[object], None],
+        on_failed: Callable[[str], None],
+    ) -> None:
+        task = ProviderTask(action, self)
+        task.completed.connect(on_success)
+        task.failed.connect(on_failed)
+        task.finished.connect(lambda: self._release_task(task))
+        self.tasks.append(task)
+        task.start()
+
+    def _release_task(self, task: ProviderTask) -> None:
+        if task in self.tasks:
+            self.tasks.remove(task)
+        if self.status_task is task:
+            self.status_task = None
+        task.deleteLater()
+
+    def _read_card(self) -> None:
+        self.btn_card.setText("กำลังอ่านข้อมูลบัตร...")
+        self.btn_card.setEnabled(False)
+        self._start_task(self.provider.read_patient, self._on_patient_read, self._on_patient_failed)
+
+    def _on_patient_read(self, result: object) -> None:
+        self.patient = result if isinstance(result, PatientInfo) else PatientInfo()
+        self.vitals = VitalState()
+        self.btn_card.setText("เริ่มอ่านข้อมูลบัตร")
+        self.btn_card.setEnabled(True)
+        self._refresh_patient()
+        self._refresh_values()
+        self.stack.setCurrentIndex(1)
+
+    def _on_patient_failed(self, message: str) -> None:
+        self.btn_card.setText("เริ่มอ่านข้อมูลบัตร")
+        self.btn_card.setEnabled(True)
+        QMessageBox.warning(self, "อ่านบัตรไม่สำเร็จ", message)
+
+    def _measure_bp(self) -> None:
+        if self.bp_cooldown_seconds > 0:
+            return
+        self.btn_bp.setText("กำลังวัด...")
+        self.btn_bp.setEnabled(False)
+        self._start_task(self.provider.measure_blood_pressure, self._on_bp_done, self._on_bp_failed)
+
+    def _on_bp_done(self, result: object) -> None:
+        if isinstance(result, BloodPressureReading):
+            self.vitals.systolic = result.systolic
+            self.vitals.diastolic = result.diastolic
+            self.vitals.pulse = result.pulse
+        self.bp_cooldown_seconds = 60
+        self.cooldown_timer.start(1000)
+        self.btn_bp.setText(f"พักเครื่อง {self.bp_cooldown_seconds} วินาที")
+        self._refresh_values()
+
+    def _on_bp_failed(self, message: str) -> None:
+        self.btn_bp.setEnabled(True)
+        self.btn_bp.setText("วัดความดัน")
+        QMessageBox.warning(self, "วัดความดันไม่สำเร็จ", message)
+
+    def _measure_spo2(self) -> None:
+        self.btn_spo2.setText("กำลังวัด...")
+        self.btn_spo2.setEnabled(False)
+        self._start_task(self.provider.measure_spo2, self._on_spo2_done, self._on_spo2_failed)
+
+    def _on_spo2_done(self, result: object) -> None:
+        self.vitals.spo2 = int(result)
+        self.btn_spo2.setEnabled(True)
+        self.btn_spo2.setText("วัดออกซิเจน")
+        self._refresh_values()
+
+    def _on_spo2_failed(self, message: str) -> None:
+        self.btn_spo2.setEnabled(True)
+        self.btn_spo2.setText("วัดออกซิเจน")
+        QMessageBox.warning(self, "วัดออกซิเจนไม่สำเร็จ", message)
+
+    def _measure_temperature(self) -> None:
+        self.btn_temp.setText("กำลังวัด...")
+        self.btn_temp.setEnabled(False)
+        self._start_task(self.provider.measure_temperature, self._on_temperature_done, self._on_temperature_failed)
+
+    def _on_temperature_done(self, result: object) -> None:
+        self.vitals.temperature = float(result)
+        self.btn_temp.setEnabled(True)
+        self.btn_temp.setText("วัดอุณหภูมิ")
+        self._refresh_values()
+
+    def _on_temperature_failed(self, message: str) -> None:
+        self.btn_temp.setEnabled(True)
+        self.btn_temp.setText("วัดอุณหภูมิ")
+        QMessageBox.warning(self, "วัดอุณหภูมิไม่สำเร็จ", message)
+
+    def _request_device_status(self) -> None:
+        if self.status_task and self.status_task.isRunning():
+            return
+        task = ProviderTask(self.provider.get_device_status, self)
+        self.status_task = task
+        task.completed.connect(self._on_status_done)
+        task.failed.connect(lambda message: None)
+        task.finished.connect(lambda: self._release_task(task))
+        task.start()
+
+    def _on_status_done(self, result: object) -> None:
+        if not isinstance(result, DeviceStatus):
+            return
+        self.lbl_battery_text.setText(f"{result.battery_percent}%")
+        self.battery_indicator.set_percent(result.battery_percent)
+        self.wifi_indicator.set_connected(result.wifi_connected)
+        self.bluetooth_indicator.set_connected(result.bluetooth_connected)
+
+    def _refresh_patient(self) -> None:
+        display_name = self.patient.th_name
+        if self.patient.en_name and self.patient.en_name != "-":
+            display_name = f"{self.patient.th_name} ({self.patient.en_name})"
+
+        for name, cid, dob, address in (
+            (self.lbl_name, self.lbl_cid, self.lbl_dob, self.lbl_address),
+            (self.sum_lbl_name, self.sum_lbl_cid, self.sum_lbl_dob, self.sum_lbl_address),
+        ):
+            name.setText(f"ผู้รับบริการ: {display_name}")
+            cid.setText(f"เลขบัตร: {self.patient.cid}")
+            dob.setText(f"วันเกิด: {self.patient.birth_date}")
+            address.setText(f"ที่อยู่: {self.patient.address}")
+
+    def _refresh_values(self) -> None:
+        bp_text = "-- / --"
+        if self.vitals.systolic is not None and self.vitals.diastolic is not None:
+            bp_text = f"{self.vitals.systolic} / {self.vitals.diastolic}"
+
+        pulse_text = self._format_int(self.vitals.pulse)
+        spo2_text = self._format_int(self.vitals.spo2)
+        temp_text = "--" if self.vitals.temperature is None else f"{self.vitals.temperature:.1f}"
+
+        self.lbl_bp_value.setText(bp_text)
+        self.lbl_pulse_value.setText(pulse_text)
+        self.lbl_spo2_value.setText(spo2_text)
+        self.lbl_temp_value.setText(temp_text)
+
+        self.sum_bp_value.setText(bp_text)
+        if self.sum_pulse_value:
+            self.sum_pulse_value.setText(pulse_text)
+        self.sum_spo2_value.setText(spo2_text)
+        self.sum_temp_value.setText(temp_text)
+
+        self._refresh_summary_badges()
+        self._refresh_summary_button()
+
+    def _refresh_summary_button(self) -> None:
+        has_data = any(
+            value is not None
+            for value in (
+                self.vitals.systolic,
+                self.vitals.diastolic,
+                self.vitals.spo2,
+                self.vitals.temperature,
+            )
+        )
+        self.btn_summary.setEnabled(has_data)
+        self.btn_summary.setObjectName("BtnSummaryReady" if has_data else "BtnSummaryDisabled")
+        self.btn_summary.setText("ดูสรุปผลการวัด" if has_data else "วัดค่าอย่างน้อย 1 รายการก่อน")
+        self.btn_summary.style().unpolish(self.btn_summary)
+        self.btn_summary.style().polish(self.btn_summary)
+
+    def _refresh_summary_badges(self) -> None:
+        if self.vitals.systolic is not None and self.vitals.diastolic is not None:
+            self._set_badge(self.sum_bp_badge, "วัดเสร็จสิ้น", "#047857", "#d1fae5")
+        else:
+            self._set_badge(self.sum_bp_badge, "ยังไม่มีข้อมูล", "#64748b", "#f1f5f9")
+
+        if self.vitals.spo2 is not None:
+            self._set_badge(self.sum_spo2_badge, "วัดเสร็จสิ้น", "#047857", "#d1fae5")
+        else:
+            self._set_badge(self.sum_spo2_badge, "ยังไม่มีข้อมูล", "#64748b", "#f1f5f9")
+
+        if self.vitals.temperature is not None:
+            self._set_badge(self.sum_temp_badge, "วัดเสร็จสิ้น", "#047857", "#d1fae5")
+        else:
+            self._set_badge(self.sum_temp_badge, "ยังไม่มีข้อมูล", "#64748b", "#f1f5f9")
+
+    def _show_summary(self) -> None:
+        self._refresh_values()
+        self.stack.setCurrentIndex(2)
+
+    def _reset_session(self) -> None:
+        self.patient = PatientInfo()
+        self.vitals = VitalState()
+        self.bp_cooldown_seconds = 0
+        self.cooldown_timer.stop()
+        self.btn_bp.setEnabled(True)
+        self.btn_bp.setText("วัดความดัน")
+        self.btn_spo2.setEnabled(True)
+        self.btn_spo2.setText("วัดออกซิเจน")
+        self.btn_temp.setEnabled(True)
+        self.btn_temp.setText("วัดอุณหภูมิ")
+        self._refresh_patient()
+        self._refresh_values()
+        self.stack.setCurrentIndex(0)
+
+    def _bp_cooldown_tick(self) -> None:
+        if self.bp_cooldown_seconds > 0:
+            self.bp_cooldown_seconds -= 1
+            self.btn_bp.setText(f"พักเครื่อง {self.bp_cooldown_seconds} วินาที")
+            return
+        self.cooldown_timer.stop()
+        self.btn_bp.setEnabled(True)
+        self.btn_bp.setText("วัดความดัน")
+
+    @staticmethod
+    def _format_int(value: int | None) -> str:
+        return "--" if value is None else str(value)
+
+    @staticmethod
+    def _set_badge(label: QLabel, text: str, color: str, background: str) -> None:
+        label.setText(text)
+        label.setStyleSheet(
+            f"color:{color}; background:{background}; border-radius:10px; "
+            "font-size:13px; font-weight:600; padding:4px 12px;"
+        )
+
+    def _apply_styles(self) -> None:
+        self.setStyleSheet(
+            """
+            * { font-family: Arial; font-size: 15px; }
+            QWidget#RootBg { background-color: #f7fbff; }
+
+            QFrame#WelcomeCard {
+                background: #ffffff;
+                border-radius: 24px;
+                border: 1px solid #d8ecf3;
+            }
+            QLabel#WelcomeLogo {
+                font-size: 24px;
+                font-weight: 800;
+                color: #0f8b8d;
+                letter-spacing: 0.8px;
+            }
+            QLabel#WelcomeTitle {
+                font-size: 26px;
+                font-weight: 700;
+                color: #16324f;
+            }
+            QLabel#WelcomeSub {
+                font-size: 15px;
+                color: #5d748c;
+            }
+
+            QFrame#Header {
+                background: #ffffff;
+                border-radius: 16px;
+                border: 1px solid #d8ecf3;
+            }
+            QLabel#HeaderName {
+                font-size: 16px;
+                font-weight: 700;
+                color: #16324f;
+            }
+            QLabel#HeaderSub {
+                font-size: 13px;
+                color: #5d748c;
+            }
+            QLabel#HeaderAddress {
+                font-size: 12px;
+                color: #7c92a4;
+            }
+            QLabel#BatteryLabel {
+                font-size: 14px;
+                font-weight: 700;
+                color: #16324f;
+            }
+            QLabel#SumTitle {
+                font-size: 18px;
+                font-weight: 700;
+                color: #16324f;
+                padding-left: 2px;
+            }
+
+            QFrame#Card {
+                background: #ffffff;
+                border-radius: 20px;
+                border: 1px solid #d8ecf3;
+                min-height: 220px;
+            }
+            QLabel#CardTag {
+                font-size: 15px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                color: #5d748c;
+            }
+            QLabel#CardUnit {
+                font-size: 14px;
+                color: #5d748c;
+                margin-top: 2px;
+            }
+            QLabel#ValueBP {
+                font-size: 46px;
+                font-weight: 800;
+                color: #2563eb;
+                letter-spacing: -1.2px;
+            }
+            QLabel#ValuePulse {
+                font-size: 38px;
+                font-weight: 800;
+                color: #0891b2;
+                letter-spacing: -0.6px;
+            }
+            QLabel#ValueSpO2 {
+                font-size: 46px;
+                font-weight: 800;
+                color: #059669;
+                letter-spacing: -1.2px;
+            }
+            QLabel#ValueTemp {
+                font-size: 46px;
+                font-weight: 800;
+                color: #0ea5e9;
+                letter-spacing: -1.2px;
+            }
+
+            QPushButton#BtnWelcomeAction {
+                background-color: #0f8b8d;
+                color: #ffffff;
+                border: none;
+                border-radius: 14px;
+                font-size: 16px;
+                font-weight: 700;
+            }
+            QPushButton#BtnWelcomeAction:hover { background-color: #0b7476; }
+
+            QPushButton#BtnMeasureBase {
+                background-color: #ecf8fb;
+                color: #0f8b8d;
+                border: 1px solid #b9e3da;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: 700;
+            }
+            QPushButton#BtnMeasureBase:hover { background-color: #dff5ef; }
+            QPushButton#BtnMeasureBase:disabled {
+                background-color: #f8fafc;
+                color: #94a3b8;
+                border-color: #dbe7ee;
+            }
+
+            QPushButton#BtnSummaryDisabled {
+                background-color: #dbe7ee;
+                color: #7c92a4;
+                border: none;
+                border-radius: 14px;
+                font-size: 15px;
+                font-weight: 700;
+            }
+            QPushButton#BtnSummaryReady {
+                background-color: #2563eb;
+                color: #ffffff;
+                border: none;
+                border-radius: 14px;
+                font-size: 15px;
+                font-weight: 700;
+            }
+            QPushButton#BtnSummaryReady:hover { background-color: #1d4ed8; }
+
+            QPushButton#BtnSecondary {
+                background-color: #ffffff;
+                color: #0f8b8d;
+                border: 1px solid #b9e3da;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: 700;
+            }
+            QPushButton#BtnSecondary:hover { background-color: #ecf8fb; }
+
+            QPushButton#BtnFinish {
+                background-color: #16324f;
+                color: #ffffff;
+                border: none;
+                border-radius: 14px;
+                font-size: 15px;
+                font-weight: 700;
+            }
+            QPushButton#BtnFinish:hover { background-color: #0f253d; }
+            """
+        )
+
+
+def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
+    app = QApplication(sys.argv)
+    window = CareKeeperWindow(provider, mode_name=mode_name)
+    window.show()
+    sys.exit(app.exec())
