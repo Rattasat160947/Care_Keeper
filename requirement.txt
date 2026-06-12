@@ -3,7 +3,7 @@ pyqtgraph
 bleak
 pyserial
 pyscard
-
+requests
 # Raspberry Pi hardware notes:
 # lib/ups.py imports smbus. Install it on Raspberry Pi with:
 # sudo apt install python3-smbus i2c-tools

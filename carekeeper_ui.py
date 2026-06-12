@@ -330,12 +330,12 @@ class CareKeeperWindow(QMainWindow):
         grid.addWidget(temp_card, 0, 2)
         layout.addLayout(grid)
 
-        btn_finish = QPushButton("เสร็จสิ้นการตรวจ")
-        btn_finish.setObjectName("BtnFinish")
-        btn_finish.setFixedHeight(44)
-        btn_finish.clicked.connect(self._reset_session)
+        self.btn_finish = QPushButton("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
+        self.btn_finish.setObjectName("BtnFinish")
+        self.btn_finish.setFixedHeight(44)
+        self.btn_finish.clicked.connect(self._submit_data) #เรียกใช้ฟังก์ชันส่งข้อมูลไปยังเซิร์ฟเวอร์เมื่อคลิก
         layout.addSpacing(4)
-        layout.addWidget(btn_finish)
+        layout.addWidget(self.btn_finish)
 
         self.stack.addWidget(root)
 
@@ -852,6 +852,50 @@ class CareKeeperWindow(QMainWindow):
             }
             QPushButton#BtnFinish:hover { background-color: #0f253d; }
             """
+        )
+    
+    # จัดการส่งข้อมูลเข้า Server
+    def _submit_data(self) -> None:
+        from datetime import datetime
+        
+        # 1. แพ็กข้อมูลทั้งหมดที่วัดได้ให้อยู่ในรูปแบบโครงสร้าง JSON (.json)
+        payload = {
+            "device_id": "CareKeeper_Pi5_01",
+            "operator_name": "สเตชันหลัก", 
+            "patient_id": self.patient.cid,
+            "patient_name": self.patient.th_name,
+            "timestamp": datetime.now().isoformat(),
+            "measurements": {
+                "systolic": self.vitals.systolic,
+                "diastolic": self.vitals.diastolic,
+                "heart_rate": self.vitals.pulse,
+                "spo2": self.vitals.spo2,
+                "temperature": self.vitals.temperature
+            }
+        }
+        
+        self.btn_finish.setText("กำลังส่งข้อมูลเข้า Server ผ่าน 4G...")
+        self.btn_finish.setEnabled(False)
+        
+        self._start_task(
+            lambda: self.provider.send_data(payload),
+            self._on_submit_success,
+            self._on_submit_failed
+        )
+
+    def _on_submit_success(self, result: object) -> None:
+        QMessageBox.information(self, "ส่งข้อมูลสำเร็จ", "บันทึกข้อมูลสัญญาณชีพเข้าสู่ระบบหลังบ้านเรียบร้อยแล้ว")
+        self.btn_finish.setEnabled(True)
+        self.btn_finish.setText("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
+        self._reset_session()
+
+    def _on_submit_failed(self, message: str) -> None:
+        self.btn_finish.setEnabled(True)
+        self.btn_finish.setText("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
+        QMessageBox.critical(
+            self, 
+            "เกิดข้อผิดพลาด", 
+            f"ไม่สามารถส่งข้อมูลได้: {message}\n\nกรุณาตรวจสอบสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง"
         )
 
 

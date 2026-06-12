@@ -7,8 +7,9 @@ import random
 import subprocess
 import sys
 import time
+import requests
 from dataclasses import dataclass
-
+from lib.thaiidcard.card import ThaiIDCard
 
 @dataclass
 class PatientInfo:
@@ -49,6 +50,9 @@ class CareKeeperProvider:
         raise NotImplementedError
 
     def get_device_status(self) -> DeviceStatus:
+        raise NotImplementedError
+    
+    def send_data(self, payload: dict) -> bool:
         raise NotImplementedError
 
 
@@ -91,6 +95,13 @@ class MockCareKeeperProvider(CareKeeperProvider):
             wifi_connected=True,
             bluetooth_connected=True,
         )
+    
+    def send_data(self, payload: dict) -> bool:
+        time.sleep(3.0)
+        print("====== [Mock API Sent] ======")
+        print(payload)
+        print("=============================")
+        return True
 
 
 class RealCareKeeperProvider(CareKeeperProvider):
@@ -114,7 +125,6 @@ class RealCareKeeperProvider(CareKeeperProvider):
         )
 
     def read_patient(self) -> PatientInfo:
-        from lib.thaiidcard.card import ThaiIDCard
 
         info = ThaiIDCard().read()
         return PatientInfo(
@@ -210,3 +220,16 @@ class RealCareKeeperProvider(CareKeeperProvider):
             return bool(output.strip())
         except Exception:
             return False
+        
+    def send_data(self, payload: dict) -> bool:
+        
+        # เปลี่ยน URL นี้เป็นจุดเชื่อมต่อ API จริงที่ตกลงกับเพื่อนฝั่งหลังบ้าน
+        url = "http://<ใส่-IP-หรือ-Domain-Server-หลังบ้าน>:8000/api/measurement"
+        headers = {"Content-Type": "application/json"}
+        
+        response = requests.post(url, json=payload, headers=headers, timeout=8)
+        
+        if response.status_code in (200, 201):
+            return True
+        else:
+            raise RuntimeError(f"Server ปฏิเสธข้อมูล (Status Code: {response.status_code})")
