@@ -16,7 +16,9 @@ carekeeper_providers.py
 TEST_BP_PORT = "/dev/ttyUSB0"
 TEST_H59_DEVICE_NAME = "H59_D105"
 TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
-TEST_API_URL = "http://localhost:8000/api/v1/carekeeper"
+TEST_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/add_health"
+TEST_API_KEY_HEADER = "api-key"
+TEST_API_KEY = "test"
 ```
 
 ถ้า backend อยู่เครื่องอื่น ห้ามใช้ `localhost` ให้เปลี่ยนเป็น IP หรือ domain ของ backend:
@@ -30,6 +32,22 @@ TEST_API_URL = "https://your-backend-domain.com/api/v1/carekeeper"
 ```python
 TEST_API_URL = "http://192.168.1.50:8000/api/v1/carekeeper"
 ```
+
+ตอนส่งสรุป ระบบจะส่ง JSON ตามรูปแบบทดสอบใน PDF:
+
+```json
+{
+  "mac": "11.11.11.11",
+  "spo2": 98,
+  "heart_rate": 75,
+  "pr_bpm": 75,
+  "sys": 120,
+  "dia": 80,
+  "pulse": 75
+}
+```
+
+ถ้าต้องเปลี่ยน API key ให้แก้ `TEST_API_KEY` และถ้า backend ใช้ชื่อ header อื่น ให้แก้ `TEST_API_KEY_HEADER`
 
 ## 2. เอาโปรเจคลง Raspberry Pi
 

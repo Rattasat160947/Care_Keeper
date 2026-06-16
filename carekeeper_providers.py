@@ -11,10 +11,13 @@ from dataclasses import dataclass
 
 
 # ยังไม่ได้เอาใส่ .env เพราะจะได้เทสง่าย
+TEST_DEVICE_MAC = "11.11.11.11"
 TEST_BP_PORT = "/dev/ttyUSB0"
 TEST_H59_DEVICE_NAME = "H59_D105"
 TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
-TEST_API_URL = "http://localhost:8000/api/v1/carekeeper"
+TEST_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/add_health"
+TEST_API_KEY_HEADER = "api-key"
+TEST_API_KEY = "test"
 
 
 @dataclass
@@ -61,12 +64,25 @@ class CareKeeperProvider:
     def send_data(self, payload: dict) -> bool:
         raise NotImplementedError
 
+    def scan_wifi_networks(self) -> list[str]:
+        return []
+
+    def connect_wifi(self, ssid: str, password: str | None = None) -> bool:
+        raise NotImplementedError
+
+    def scan_bluetooth_devices(self) -> list[tuple[str, str]]:
+        return []
+
+    def connect_bluetooth(self, address: str) -> bool:
+        raise NotImplementedError
+
 
 class MockCareKeeperProvider(CareKeeperProvider):
     """Development provider for UI preview without real hardware."""
 
     def __init__(self) -> None:
         self._battery_percent = 100
+        self.device_mac = TEST_DEVICE_MAC
 
     def read_patient(self) -> PatientInfo:
         time.sleep(1.0)
@@ -109,6 +125,22 @@ class MockCareKeeperProvider(CareKeeperProvider):
         print("=============================")
         return True
 
+    def scan_wifi_networks(self) -> list[str]:
+        time.sleep(0.5)
+        return ["CareKeeper-Lab", "Hospital-WiFi", "Mobile-Hotspot"]
+
+    def connect_wifi(self, ssid: str, password: str | None = None) -> bool:
+        print(f"[Mock Wi-Fi] connect to {ssid}")
+        return True
+
+    def scan_bluetooth_devices(self) -> list[tuple[str, str]]:
+        time.sleep(0.5)
+        return [("H59_D105", TEST_H59_DEVICE_ADDRESS), ("Demo Oximeter", "AA:BB:CC:DD:EE:FF")]
+
+    def connect_bluetooth(self, address: str) -> bool:
+        print(f"[Mock Bluetooth] connect to {address}")
+        return True
+
 
 class RealCareKeeperProvider(CareKeeperProvider):
     """Hardware provider for Raspberry Pi / connected devices.
@@ -124,6 +156,7 @@ class RealCareKeeperProvider(CareKeeperProvider):
         h59_device_address: str | None = None,
         api_url: str | None = None,
     ) -> None:
+        self.device_mac = TEST_DEVICE_MAC
         self.bp_port = bp_port or TEST_BP_PORT
         self.h59_device_name = h59_device_name or TEST_H59_DEVICE_NAME
         self.h59_device_address = h59_device_address or TEST_H59_DEVICE_ADDRESS
@@ -232,6 +265,8 @@ class RealCareKeeperProvider(CareKeeperProvider):
             raise RuntimeError("ยังไม่ได้ตั้งค่า CAREKEEPER_API_URL สำหรับ backend")
 
         headers = {"Content-Type": "application/json"}
+        if TEST_API_KEY:
+            headers[TEST_API_KEY_HEADER] = TEST_API_KEY
         
         response = requests.post(self.api_url, json=payload, headers=headers, timeout=8)
         
@@ -248,6 +283,33 @@ class RealCareKeeperProvider(CareKeeperProvider):
         except Exception as e:
             print(f"Failed to toggle WiFi: {e}")
 
+    def scan_wifi_networks(self) -> list[str]:
+        try:
+            output = subprocess.check_output(
+                ["nmcli", "-t", "-f", "SSID", "device", "wifi", "list"],
+                text=True,
+                errors="ignore",
+            )
+            networks = []
+            for line in output.splitlines():
+                ssid = line.strip()
+                if ssid and ssid not in networks:
+                    networks.append(ssid)
+            return networks
+        except Exception as e:
+            raise RuntimeError(f"ไม่สามารถสแกน Wi-Fi ได้: {e}")
+
+    def connect_wifi(self, ssid: str, password: str | None = None) -> bool:
+        command = ["nmcli", "device", "wifi", "connect", ssid]
+        if password:
+            command.extend(["password", password])
+        try:
+            subprocess.run(command, check=True, text=True, capture_output=True)
+            return True
+        except subprocess.CalledProcessError as e:
+            message = e.stderr.strip() or e.stdout.strip() or str(e)
+            raise RuntimeError(f"เชื่อมต่อ Wi-Fi ไม่สำเร็จ: {message}")
+
     def toggle_bluetooth(self) -> None:
         current_state = self._is_bluetooth_connected()
         cmd = "power off" if current_state else "power on"
@@ -255,3 +317,31 @@ class RealCareKeeperProvider(CareKeeperProvider):
             subprocess.run(["bluetoothctl", cmd.split()[0], cmd.split()[1]], check=True)
         except Exception as e:
             print(f"Failed to toggle Bluetooth: {e}")
+
+    def scan_bluetooth_devices(self) -> list[tuple[str, str]]:
+        try:
+            subprocess.run(["bluetoothctl", "scan", "on"], timeout=8, capture_output=True, text=True)
+        except Exception:
+            pass
+
+        try:
+            output = subprocess.check_output(["bluetoothctl", "devices"], text=True, errors="ignore")
+            devices = []
+            for line in output.splitlines():
+                parts = line.strip().split(" ", 2)
+                if len(parts) >= 3 and parts[0] == "Device":
+                    devices.append((parts[2], parts[1]))
+            return devices
+        except Exception as e:
+            raise RuntimeError(f"ไม่สามารถสแกน Bluetooth ได้: {e}")
+
+    def connect_bluetooth(self, address: str) -> bool:
+        try:
+            subprocess.run(["bluetoothctl", "pair", address], timeout=15, capture_output=True, text=True)
+            subprocess.run(["bluetoothctl", "trust", address], timeout=10, capture_output=True, text=True)
+            subprocess.run(["bluetoothctl", "connect", address], timeout=15, check=True, capture_output=True, text=True)
+            self.h59_device_address = address
+            return True
+        except subprocess.CalledProcessError as e:
+            message = e.stderr.strip() or e.stdout.strip() or str(e)
+            raise RuntimeError(f"เชื่อมต่อ Bluetooth ไม่สำเร็จ: {message}")

@@ -115,10 +115,28 @@ For quick real-device testing, hardware values are currently hardcoded near the 
 TEST_BP_PORT = "/dev/ttyUSB0"
 TEST_H59_DEVICE_NAME = "H59_D105"
 TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
-TEST_API_URL = "http://localhost:8000/api/v1/carekeeper"
+TEST_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/add_health"
+TEST_API_KEY_HEADER = "api-key"
+TEST_API_KEY = "test"
 ```
 
 Edit these values before running `main_real.py` if the serial port, BLE address, or backend URL changes.
+
+The summary submit button sends JSON in the API format from the test PDF:
+
+```json
+{
+  "mac": "11.11.11.11",
+  "spo2": 98,
+  "heart_rate": 75,
+  "pr_bpm": 75,
+  "sys": 120,
+  "dia": 80,
+  "pulse": 75
+}
+```
+
+On the dashboard, click the Wi-Fi or Bluetooth icon to scan and choose a network/device on Raspberry Pi.
 
 ## Hardware Notes
 

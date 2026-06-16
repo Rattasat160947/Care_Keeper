@@ -13,7 +13,9 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -151,6 +153,11 @@ class BatteryIndicator(QWidget):
             painter.drawRoundedRect(3, 3, fill_width, 9, 1.5, 1.5)
 
 
+class ToastLabel(QLabel):
+    def mousePressEvent(self, event) -> None:
+        self.hide()
+
+
 class CareKeeperWindow(QMainWindow):
     def __init__(self, provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
         super().__init__()
@@ -172,6 +179,7 @@ class CareKeeperWindow(QMainWindow):
         self._build_dashboard_page()
         self._build_summary_page()
         self._apply_styles()
+        self._build_toast()
         self._refresh_patient()
         self._refresh_values()
 
@@ -198,6 +206,28 @@ class CareKeeperWindow(QMainWindow):
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(0)
         return card, layout
+
+    def _build_toast(self) -> None:
+        self.toast = ToastLabel(self)
+        self.toast.setAlignment(Qt.AlignCenter)
+        self.toast.setWordWrap(True)
+        self.toast.setCursor(Qt.PointingHandCursor)
+        self.toast.hide()
+
+    def _show_toast(self, message: str, success: bool = True, duration_ms: int = 2000) -> None:
+        background = "#d1fae5" if success else "#fee2e2"
+        color = "#065f46" if success else "#991b1b"
+        border = "#86efac" if success else "#fecaca"
+        self.toast.setText(message)
+        self.toast.setStyleSheet(
+            f"background:{background}; color:{color}; border:1px solid {border}; "
+            "border-radius:12px; padding:10px 18px; font-size:17px; font-weight:800;"
+        )
+        width = min(680, self.width() - 80)
+        self.toast.setGeometry((self.width() - width) // 2, self.height() - 92, width, 54)
+        self.toast.raise_()
+        self.toast.show()
+        QTimer.singleShot(duration_ms, self.toast.hide)
 
     def _build_scan_page(self) -> None:
         root = QWidget()
@@ -404,8 +434,8 @@ class CareKeeperWindow(QMainWindow):
 
         self.bluetooth_indicator = BluetoothIndicator()
         self.wifi_indicator = WifiIndicator()
-        self.wifi_indicator.clicked.connect(lambda: self.provider.toggle_wifi() if hasattr(self.provider, 'toggle_wifi') else None)
-        self.bluetooth_indicator.clicked.connect(lambda: self.provider.toggle_bluetooth() if hasattr(self.provider, 'toggle_bluetooth') else None)
+        self.wifi_indicator.clicked.connect(self._open_wifi_selector)
+        self.bluetooth_indicator.clicked.connect(self._open_bluetooth_selector)
         self.battery_indicator = BatteryIndicator()
         self.lbl_battery_text = QLabel("0%")
         self.lbl_battery_text.setObjectName("BatteryLabel")
@@ -597,6 +627,74 @@ class CareKeeperWindow(QMainWindow):
         self.wifi_indicator.set_connected(result.wifi_connected)
         self.bluetooth_indicator.set_connected(result.bluetooth_connected)
 
+    def _open_wifi_selector(self) -> None:
+        self._show_toast("กำลังสแกน Wi-Fi...", success=True, duration_ms=1200)
+        self._start_task(self.provider.scan_wifi_networks, self._on_wifi_scan_done, self._on_wifi_action_failed)
+
+    def _on_wifi_scan_done(self, result: object) -> None:
+        networks = list(result) if isinstance(result, list) else []
+        if not networks:
+            self._show_toast("ไม่พบ Wi-Fi ที่เลือกได้", success=False)
+            return
+
+        ssid, ok = QInputDialog.getItem(self, "เลือก Wi-Fi", "Wi-Fi network:", networks, 0, False)
+        if not ok or not ssid:
+            return
+
+        password, ok = QInputDialog.getText(
+            self,
+            "รหัสผ่าน Wi-Fi",
+            f"Password for {ssid}:",
+            QLineEdit.Password,
+        )
+        if not ok:
+            return
+
+        self._show_toast(f"กำลังเชื่อมต่อ Wi-Fi: {ssid}", success=True, duration_ms=1200)
+        self._start_task(
+            lambda: self.provider.connect_wifi(ssid, password or None),
+            lambda result: self._on_network_connected("เชื่อมต่อ Wi-Fi สำเร็จ"),
+            self._on_wifi_action_failed,
+        )
+
+    def _open_bluetooth_selector(self) -> None:
+        self._show_toast("กำลังสแกน Bluetooth...", success=True, duration_ms=1200)
+        self._start_task(
+            self.provider.scan_bluetooth_devices,
+            self._on_bluetooth_scan_done,
+            self._on_bluetooth_action_failed,
+        )
+
+    def _on_bluetooth_scan_done(self, result: object) -> None:
+        devices = list(result) if isinstance(result, list) else []
+        if not devices:
+            self._show_toast("ไม่พบ Bluetooth device ที่เลือกได้", success=False)
+            return
+
+        labels = [f"{name} ({address})" for name, address in devices]
+        selected, ok = QInputDialog.getItem(self, "เลือก Bluetooth", "Bluetooth device:", labels, 0, False)
+        if not ok or not selected:
+            return
+
+        index = labels.index(selected)
+        address = devices[index][1]
+        self._show_toast(f"กำลังเชื่อมต่อ Bluetooth: {address}", success=True, duration_ms=1200)
+        self._start_task(
+            lambda: self.provider.connect_bluetooth(address),
+            lambda result: self._on_network_connected("เชื่อมต่อ Bluetooth สำเร็จ"),
+            self._on_bluetooth_action_failed,
+        )
+
+    def _on_network_connected(self, message: str) -> None:
+        self._show_toast(message, success=True)
+        self._request_device_status()
+
+    def _on_wifi_action_failed(self, message: str) -> None:
+        self._show_toast(f"Wi-Fi: {message}", success=False, duration_ms=3000)
+
+    def _on_bluetooth_action_failed(self, message: str) -> None:
+        self._show_toast(f"Bluetooth: {message}", success=False, duration_ms=3000)
+
     def _refresh_patient(self) -> None:
         display_name = self.patient.th_name
         if self.patient.en_name and self.patient.en_name != "-":
@@ -709,7 +807,7 @@ class CareKeeperWindow(QMainWindow):
     def _apply_styles(self) -> None:
         self.setStyleSheet(
             """
-            * { font-family: Arial; font-size: 15px; }
+            * { font-family: Arial; font-size: 17px; }
             QWidget#RootBg { background-color: #f7fbff; }
 
             QFrame#WelcomeCard {
@@ -729,8 +827,8 @@ class CareKeeperWindow(QMainWindow):
                 color: #16324f;
             }
             QLabel#WelcomeSub {
-                font-size: 15px;
-                color: #5d748c;
+                font-size: 17px;
+                color: #334155;
             }
 
             QFrame#Header {
@@ -739,21 +837,21 @@ class CareKeeperWindow(QMainWindow):
                 border: 1px solid #d8ecf3;
             }
             QLabel#HeaderName {
-                font-size: 16px;
-                font-weight: 700;
+                font-size: 18px;
+                font-weight: 800;
                 color: #16324f;
             }
             QLabel#HeaderSub {
-                font-size: 13px;
-                color: #5d748c;
+                font-size: 15px;
+                color: #334155;
             }
             QLabel#HeaderAddress {
-                font-size: 12px;
-                color: #7c92a4;
+                font-size: 14px;
+                color: #475569;
             }
             QLabel#BatteryLabel {
-                font-size: 14px;
-                font-weight: 700;
+                font-size: 15px;
+                font-weight: 800;
                 color: #16324f;
             }
             QLabel#SumTitle {
@@ -770,14 +868,14 @@ class CareKeeperWindow(QMainWindow):
                 min-height: 220px;
             }
             QLabel#CardTag {
-                font-size: 15px;
-                font-weight: 700;
+                font-size: 16px;
+                font-weight: 800;
                 letter-spacing: 0.5px;
-                color: #5d748c;
+                color: #334155;
             }
             QLabel#CardUnit {
-                font-size: 14px;
-                color: #5d748c;
+                font-size: 15px;
+                color: #334155;
                 margin-top: 2px;
             }
             QLabel#ValueBP {
@@ -810,8 +908,8 @@ class CareKeeperWindow(QMainWindow):
                 color: #ffffff;
                 border: none;
                 border-radius: 14px;
-                font-size: 16px;
-                font-weight: 700;
+                font-size: 17px;
+                font-weight: 800;
             }
             QPushButton#BtnWelcomeAction:hover { background-color: #0b7476; }
 
@@ -820,8 +918,8 @@ class CareKeeperWindow(QMainWindow):
                 color: #0f8b8d;
                 border: 1px solid #b9e3da;
                 border-radius: 10px;
-                font-size: 14px;
-                font-weight: 700;
+                font-size: 15px;
+                font-weight: 800;
             }
             QPushButton#BtnMeasureBase:hover { background-color: #dff5ef; }
             QPushButton#BtnMeasureBase:disabled {
@@ -835,16 +933,16 @@ class CareKeeperWindow(QMainWindow):
                 color: #7c92a4;
                 border: none;
                 border-radius: 14px;
-                font-size: 15px;
-                font-weight: 700;
+                font-size: 16px;
+                font-weight: 800;
             }
             QPushButton#BtnSummaryReady {
                 background-color: #2563eb;
                 color: #ffffff;
                 border: none;
                 border-radius: 14px;
-                font-size: 15px;
-                font-weight: 700;
+                font-size: 16px;
+                font-weight: 800;
             }
             QPushButton#BtnSummaryReady:hover { background-color: #1d4ed8; }
 
@@ -872,22 +970,14 @@ class CareKeeperWindow(QMainWindow):
     
     # จัดการส่งข้อมูลเข้า Server
     def _submit_data(self) -> None:
-        from datetime import datetime
-        
-        # 1. แพ็กข้อมูลทั้งหมดที่วัดได้ให้อยู่ในรูปแบบโครงสร้าง JSON (.json)
         payload = {
-            "device_id": "CareKeeper_Pi5_01",
-            "operator_name": "สเตชันหลัก", 
-            "patient_id": self.patient.cid,
-            "patient_name": self.patient.th_name,
-            "timestamp": datetime.now().isoformat(),
-            "measurements": {
-                "systolic": self.vitals.systolic,
-                "diastolic": self.vitals.diastolic,
-                "heart_rate": self.vitals.pulse,
-                "spo2": self.vitals.spo2,
-                "temperature": self.vitals.temperature
-            }
+            "mac": getattr(self.provider, "device_mac", "11.11.11.11"),
+            "spo2": self.vitals.spo2,
+            "heart_rate": self.vitals.pulse,
+            "pr_bpm": self.vitals.pulse,
+            "sys": self.vitals.systolic,
+            "dia": self.vitals.diastolic,
+            "pulse": self.vitals.pulse,
         }
         
         self.btn_finish.setText("กำลังส่งข้อมูลเข้าระบบ...")
@@ -900,19 +990,15 @@ class CareKeeperWindow(QMainWindow):
         )
 
     def _on_submit_success(self, result: object) -> None:
-        QMessageBox.information(self, "ส่งข้อมูลสำเร็จ", "บันทึกข้อมูลสัญญาณชีพเข้าสู่ระบบหลังบ้านเรียบร้อยแล้ว")
         self.btn_finish.setEnabled(True)
         self.btn_finish.setText("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
-        self._reset_session()
+        self._show_toast("ส่งข้อมูลสำเร็จ", success=True)
+        QTimer.singleShot(2000, self._reset_session)
 
     def _on_submit_failed(self, message: str) -> None:
         self.btn_finish.setEnabled(True)
         self.btn_finish.setText("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
-        QMessageBox.critical(
-            self, 
-            "เกิดข้อผิดพลาด", 
-            f"ไม่สามารถส่งข้อมูลได้: {message}\n\nกรุณาตรวจสอบสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง"
-        )
+        self._show_toast(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False, duration_ms=3000)
 
 
 def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
