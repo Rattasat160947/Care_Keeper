@@ -2,14 +2,20 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import random
 import subprocess
 import sys
 import time
 import requests
 from dataclasses import dataclass
-from lib.thaiidcard.card import ThaiIDCard
+
+
+# ยังไม่ได้เอาใส่ .env เพราะจะได้เทสง่าย
+TEST_BP_PORT = "/dev/ttyUSB0"
+TEST_H59_DEVICE_NAME = "H59_D105"
+TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
+TEST_API_URL = "http://localhost:8000/api/v1/carekeeper"
+
 
 @dataclass
 class PatientInfo:
@@ -116,15 +122,15 @@ class RealCareKeeperProvider(CareKeeperProvider):
         bp_port: str | None = None,
         h59_device_name: str | None = None,
         h59_device_address: str | None = None,
+        api_url: str | None = None,
     ) -> None:
-        self.bp_port = bp_port or os.getenv("BP_PORT", "/dev/ttyUSB0")
-        self.h59_device_name = h59_device_name or os.getenv("H59_DEVICE_NAME", "H59_D105")
-        self.h59_device_address = h59_device_address or os.getenv(
-            "H59_DEVICE_ADDRESS",
-            "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D",
-        )
+        self.bp_port = bp_port or TEST_BP_PORT
+        self.h59_device_name = h59_device_name or TEST_H59_DEVICE_NAME
+        self.h59_device_address = h59_device_address or TEST_H59_DEVICE_ADDRESS
+        self.api_url = api_url or TEST_API_URL
 
     def read_patient(self) -> PatientInfo:
+        from lib.thaiidcard.card import ThaiIDCard
 
         info = ThaiIDCard().read()
         return PatientInfo(
@@ -222,14 +228,14 @@ class RealCareKeeperProvider(CareKeeperProvider):
             return False
         
     def send_data(self, payload: dict) -> bool:
-        
-        # เปลี่ยน URL นี้เป็นจุดเชื่อมต่อ API จริงที่ตกลงกับเพื่อนฝั่งหลังบ้าน
-        url = "http://<ใส่-IP-หรือ-Domain-Server-หลังบ้าน>:8000/api/measurement"
+        if not self.api_url:
+            raise RuntimeError("ยังไม่ได้ตั้งค่า CAREKEEPER_API_URL สำหรับ backend")
+
         headers = {"Content-Type": "application/json"}
         
-        response = requests.post(url, json=payload, headers=headers, timeout=8)
+        response = requests.post(self.api_url, json=payload, headers=headers, timeout=8)
         
-        if response.status_code in (200, 201):
+        if 200 <= response.status_code < 300:
             return True
-        else:
-            raise RuntimeError(f"Server ปฏิเสธข้อมูล (Status Code: {response.status_code})")
+
+        raise RuntimeError(f"Server ปฏิเสธข้อมูล (Status Code: {response.status_code})")

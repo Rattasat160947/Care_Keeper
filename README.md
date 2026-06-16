@@ -92,7 +92,7 @@ Install system packages required by the hardware modules:
 
 ```bash
 sudo apt update
-sudo apt install python3-smbus i2c-tools bluetooth bluez pcscd libpcsclite-dev
+sudo apt install python3-smbus i2c-tools bluetooth bluez pcscd libpcsclite-dev swig python3-dev
 ```
 
 Add the current user to hardware access groups:
@@ -109,15 +109,16 @@ sudo reboot
 
 ## Hardware Configuration
 
-The real provider reads optional environment variables:
+For quick real-device testing, hardware values are currently hardcoded near the top of `carekeeper_providers.py`:
 
-```bash
-export BP_PORT=/dev/ttyUSB0
-export H59_DEVICE_NAME=H59_D105
-export H59_DEVICE_ADDRESS=EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D
+```python
+TEST_BP_PORT = "/dev/ttyUSB0"
+TEST_H59_DEVICE_NAME = "H59_D105"
+TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
+TEST_API_URL = "http://localhost:8000/api/v1/carekeeper"
 ```
 
-Defaults are already set in `carekeeper_providers.py`, but these variables are useful if the serial port or BLE device changes.
+Edit these values before running `main_real.py` if the serial port, BLE address, or backend URL changes.
 
 ## Hardware Notes
 
