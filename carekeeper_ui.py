@@ -890,7 +890,7 @@ class CareKeeperWindow(QMainWindow):
             }
         }
         
-        self.btn_finish.setText("กำลังส่งข้อมูลเข้า Server ผ่าน 4G...")
+        self.btn_finish.setText("กำลังส่งข้อมูลเข้าระบบ...")
         self.btn_finish.setEnabled(False)
         
         self._start_task(
