@@ -59,10 +59,16 @@ class ProviderTask(QThread):
 
 
 class WifiIndicator(QWidget):
+    clicked = Signal()
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.connected = False
         self.setFixedSize(26, 20)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
 
     def set_connected(self, connected: bool) -> None:
         self.connected = connected
@@ -87,10 +93,17 @@ class WifiIndicator(QWidget):
 
 
 class BluetoothIndicator(QWidget):
+    clicked = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.connected = False
         self.setFixedSize(20, 20)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
 
     def set_connected(self, connected: bool) -> None:
         self.connected = connected
@@ -241,11 +254,12 @@ class CareKeeperWindow(QMainWindow):
 
         bp_card, bp = self._make_card()
         bp.addWidget(self._tag("ความดันโลหิต (BLOOD PRESSURE)"))
-        bp.addSpacing(12)
+        bp.addSpacing(6)
         self.lbl_bp_value = self._value_label("-- / --", "ValueBP")
         bp.addWidget(self.lbl_bp_value)
+        bp.addSpacing(10)
         bp.addWidget(self._unit("mmHg"))
-        bp.addSpacing(6)
+        bp.addSpacing(2)
         bp.addWidget(self._tag("ชีพจร (PULSE)"))
         self.lbl_pulse_value = self._value_label("--", "ValuePulse")
         bp.addWidget(self.lbl_pulse_value)
@@ -257,10 +271,10 @@ class CareKeeperWindow(QMainWindow):
 
         spo2_card, spo2 = self._make_card()
         spo2.addWidget(self._tag("ออกซิเจนในเลือด (SpO2)"))
-        spo2.addSpacing(12)
+        spo2.addSpacing(6)
         self.lbl_spo2_value = self._value_label("--", "ValueSpO2")
         spo2.addWidget(self.lbl_spo2_value)
-        spo2.addWidget(self._unit("% oxygen saturation"))
+        spo2.addWidget(self._unit("%"))
         spo2.addStretch()
         self.btn_spo2 = self._measure_button("วัดออกซิเจน")
         self.btn_spo2.clicked.connect(self._measure_spo2)
@@ -268,7 +282,7 @@ class CareKeeperWindow(QMainWindow):
 
         temp_card, temp = self._make_card()
         temp.addWidget(self._tag("อุณหภูมิร่างกาย (TEMPERATURE)"))
-        temp.addSpacing(12)
+        temp.addSpacing(6)
         self.lbl_temp_value = self._value_label("--", "ValueTemp")
         temp.addWidget(self.lbl_temp_value)
         temp.addWidget(self._unit("°C"))
@@ -316,7 +330,7 @@ class CareKeeperWindow(QMainWindow):
         )
         spo2_card, self.sum_spo2_value, _, self.sum_spo2_badge = self._summary_card(
             "ออกซิเจนในเลือด (SpO2)",
-            "% oxygen saturation",
+            "%",
             "ValueSpO2",
         )
         temp_card, self.sum_temp_value, _, self.sum_temp_badge = self._summary_card(
@@ -390,6 +404,8 @@ class CareKeeperWindow(QMainWindow):
 
         self.bluetooth_indicator = BluetoothIndicator()
         self.wifi_indicator = WifiIndicator()
+        self.wifi_indicator.clicked.connect(lambda: self.provider.toggle_wifi() if hasattr(self.provider, 'toggle_wifi') else None)
+        self.bluetooth_indicator.clicked.connect(lambda: self.provider.toggle_bluetooth() if hasattr(self.provider, 'toggle_bluetooth') else None)
         self.battery_indicator = BatteryIndicator()
         self.lbl_battery_text = QLabel("0%")
         self.lbl_battery_text.setObjectName("BatteryLabel")

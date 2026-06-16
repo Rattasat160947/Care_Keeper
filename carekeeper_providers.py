@@ -239,3 +239,19 @@ class RealCareKeeperProvider(CareKeeperProvider):
             return True
 
         raise RuntimeError(f"Server ปฏิเสธข้อมูล (Status Code: {response.status_code})")
+
+    def toggle_wifi(self) -> None:
+        current_state = self._is_wifi_connected()
+        cmd = "off" if current_state else "on"
+        try:
+            subprocess.run(["nmcli", "radio", "wifi", cmd], check=True)
+        except Exception as e:
+            print(f"Failed to toggle WiFi: {e}")
+
+    def toggle_bluetooth(self) -> None:
+        current_state = self._is_bluetooth_connected()
+        cmd = "power off" if current_state else "power on"
+        try:
+            subprocess.run(["bluetoothctl", cmd.split()[0], cmd.split()[1]], check=True)
+        except Exception as e:
+            print(f"Failed to toggle Bluetooth: {e}")
