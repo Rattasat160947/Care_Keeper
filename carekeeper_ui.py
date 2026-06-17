@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass
 from typing import Callable
 
-from PySide6.QtCore import QThread, QTimer, Qt, Signal
+from PySide6.QtCore import QRectF, QThread, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QBrush , QFontDatabase
 from PySide6.QtWidgets import (
     QApplication,
@@ -161,6 +161,61 @@ class BatteryIndicator(QWidget):
             painter.drawRoundedRect(3, 3, fill_width, 9, 1.5, 1.5)
 
 
+class PowerButton(QWidget):
+    """Hand-drawn power icon (avoids relying on a font glyph that may render as a box)."""
+
+    clicked = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(56, 56)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("รีสตาร์ท / ปิดเครื่อง")
+        self.hovered = False
+
+    def enterEvent(self, event) -> None:
+        self.hovered = True
+        self.update()
+
+    def leaveEvent(self, event) -> None:
+        self.hovered = False
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        if self.isEnabled() and event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+    def setEnabled(self, enabled: bool) -> None:
+        super().setEnabled(enabled)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        if not self.isEnabled():
+            bg, border, icon = QColor("#f1f5f9"), QColor("#cbd5e1"), QColor("#94a3b8")
+        elif self.hovered:
+            bg, border, icon = QColor("#fee2e2"), QColor("#fca5a5"), QColor("#b91c1c")
+        else:
+            bg, border, icon = QColor("#ffffff"), QColor("#9ec9d6"), QColor("#475569")
+
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        painter.setPen(QPen(border, 2))
+        painter.setBrush(QBrush(bg))
+        painter.drawEllipse(rect)
+
+        cx, cy = rect.center().x(), rect.center().y()
+        radius = rect.width() * 0.22
+        painter.setPen(QPen(icon, 2.6, Qt.SolidLine, Qt.RoundCap))
+        painter.setBrush(Qt.NoBrush)
+        arc_rect = QRectF(cx - radius, cy - radius + 1, radius * 2, radius * 2)
+        start_angle = int((90 + 35) * 16)
+        span_angle = int((360 - 70) * 16)
+        painter.drawArc(arc_rect, start_angle, span_angle)
+        painter.drawLine(int(cx), int(cy - radius - 3), int(cx), int(cy - 1))
+
+
 class ToastLabel(QLabel):
     def mousePressEvent(self, event) -> None:
         self.hide()
@@ -309,11 +364,7 @@ class CareKeeperWindow(QMainWindow):
 
         top_row = QHBoxLayout()
         top_row.addStretch()
-        self.btn_power = QPushButton("⏻")
-        self.btn_power.setObjectName("BtnPower")
-        self.btn_power.setFixedSize(56, 56)
-        self.btn_power.setCursor(Qt.PointingHandCursor)
-        self.btn_power.setToolTip("รีสตาร์ท / ปิดเครื่อง")
+        self.btn_power = PowerButton()
         self.btn_power.clicked.connect(self._open_power_menu)
         self._add_soft_shadow(self.btn_power)
         top_row.addWidget(self.btn_power)
@@ -1108,7 +1159,7 @@ class CareKeeperWindow(QMainWindow):
                 padding-left: 4px;
             }
             QLabel#ValueBP {
-                font-size: 46px;
+                font-size: 56px;
                 font-weight: 900;
                 color: #1d4ed8;
                 letter-spacing: -1.2px;
@@ -1141,20 +1192,6 @@ class CareKeeperWindow(QMainWindow):
                 font-weight: 900;
             }
             QPushButton#BtnWelcomeAction:hover { background-color: #0b7476; }
-
-            QPushButton#BtnPower {
-                background-color: #ffffff;
-                color: #475569;
-                border: 2px solid #9ec9d6;
-                border-radius: 28px;
-                font-size: 26px;
-                font-weight: 900;
-            }
-            QPushButton#BtnPower:hover {
-                background-color: #fee2e2;
-                color: #b91c1c;
-                border-color: #fca5a5;
-            }
 
             QPushButton#BtnMeasureBase {
                 background-color: #e3f9f1;
