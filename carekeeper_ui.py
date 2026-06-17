@@ -178,7 +178,8 @@ class CareKeeperWindow(QMainWindow):
         self.bp_cooldown_seconds = 0
 
         self.setWindowTitle(f"CareKeeper - {mode_name}")
-        self.setFixedSize(WINDOW_WIDTH, WINDOW_HEIGHT)
+        self.setWindowFlag(Qt.FramelessWindowHint, True)
+        self.setMinimumSize(WINDOW_WIDTH, WINDOW_HEIGHT)
 
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
@@ -282,16 +283,20 @@ class CareKeeperWindow(QMainWindow):
         root = QWidget()
         root.setObjectName("RootBg")
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
 
         layout.addWidget(self._build_patient_header(summary=False))
 
         grid = QGridLayout()
-        grid.setSpacing(12)
+        grid.setSpacing(16)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
 
         # --- กล่องความดันโลหิต ---
         bp_card, bp = self._make_card()
+        bp.setSpacing(8)
         bp.addWidget(self._tag("ความดันโลหิต (BLOOD PRESSURE)"))
         
         row_bp = QHBoxLayout()
@@ -302,7 +307,7 @@ class CareKeeperWindow(QMainWindow):
         row_bp.addStretch()
         bp.addLayout(row_bp)
         
-        bp.addSpacing(4)
+        bp.addStretch(1)
         bp.addWidget(self._tag("ชีพจร (PULSE)"))
         
         row_pulse = QHBoxLayout()
@@ -313,13 +318,14 @@ class CareKeeperWindow(QMainWindow):
         row_pulse.addStretch()
         bp.addLayout(row_pulse)
         
-        bp.addStretch()
+        bp.addStretch(2)
         self.btn_bp = self._measure_button("วัดความดัน")
         self.btn_bp.clicked.connect(self._measure_bp)
         bp.addWidget(self.btn_bp)
 
         # --- กล่องออกซิเจน ---
         spo2_card, spo2 = self._make_card()
+        spo2.setSpacing(8)
         spo2.addWidget(self._tag("ออกซิเจนในเลือด (SpO2)"))
         
         row_spo2 = QHBoxLayout()
@@ -328,15 +334,17 @@ class CareKeeperWindow(QMainWindow):
         row_spo2.addWidget(self.lbl_spo2_value)
         row_spo2.addWidget(self._unit("%"))
         row_spo2.addStretch()
+        spo2.addStretch(1)
         spo2.addLayout(row_spo2)
         
-        spo2.addStretch()
+        spo2.addStretch(2)
         self.btn_spo2 = self._measure_button("วัดออกซิเจน")
         self.btn_spo2.clicked.connect(self._measure_spo2)
         spo2.addWidget(self.btn_spo2)
 
         # --- กล่องอุณหภูมิ ---
         temp_card, temp = self._make_card()
+        temp.setSpacing(8)
         temp.addWidget(self._tag("อุณหภูมิร่างกาย (TEMPERATURE)"))
         
         row_temp = QHBoxLayout()
@@ -345,9 +353,10 @@ class CareKeeperWindow(QMainWindow):
         row_temp.addWidget(self.lbl_temp_value)
         row_temp.addWidget(self._unit("°C"))
         row_temp.addStretch()
+        temp.addStretch(1)
         temp.addLayout(row_temp)
         
-        temp.addStretch()
+        temp.addStretch(2)
         self.btn_temp = self._measure_button("วัดอุณหภูมิ")
         self.btn_temp.clicked.connect(self._measure_temperature)
         temp.addWidget(self.btn_temp)
@@ -355,8 +364,8 @@ class CareKeeperWindow(QMainWindow):
         grid.addWidget(bp_card, 0, 0)
         grid.addWidget(spo2_card, 0, 1)
         grid.addWidget(temp_card, 0, 2)
-        layout.addLayout(grid)
-        layout.addSpacing(5)
+        layout.addLayout(grid, 1)
+        layout.addSpacing(4)
 
         self.btn_summary = QPushButton("วัดค่าอย่างน้อย 1 รายการก่อน")
         self.btn_summary.setObjectName("BtnSummaryDisabled")
@@ -893,41 +902,41 @@ class CareKeeperWindow(QMainWindow):
                 background: #ffffff;
                 border-radius: 20px;
                 border: 1px solid #d8ecf3;
-                min-height: 220px;
+                min-height: 245px;
             }
             QLabel#CardTag {
-                font-size: 17px;
+                font-size: 18px;
                 font-weight: 800;
                 letter-spacing: 0.5px;
                 color: #334155;
             }
             QLabel#CardUnit {
-                font-size: 18px;
+                font-size: 20px;
                 font-weight: 700;
                 color: #64748b;
                 padding-bottom: 8px; /* ดันให้ฐานตัวอักษรเสมอกับตัวเลขใหญ่ๆ */
                 padding-left: 4px;
             }
             QLabel#ValueBP {
-                font-size: 52px;
+                font-size: 56px;
                 font-weight: 900;
                 color: #2563eb;
                 letter-spacing: -1.2px;
             }
             QLabel#ValuePulse {
-                font-size: 42px;
+                font-size: 46px;
                 font-weight: 900;
                 color: #2563eb;
                 letter-spacing: -0.6px;
             }
             QLabel#ValueSpO2 {
-                font-size: 52px;
+                font-size: 68px;
                 font-weight: 900;
                 color: #2563eb;
                 letter-spacing: -1.2px;
             }
             QLabel#ValueTemp {
-                font-size: 52px;
+                font-size: 68px;
                 font-weight: 900;
                 color: #2563eb;
                 letter-spacing: -1.2px;
@@ -948,7 +957,7 @@ class CareKeeperWindow(QMainWindow):
                 color: #047857;
                 border: 2px solid #34d399;
                 border-radius: 10px;
-                font-size: 18px;
+                font-size: 19px;
                 font-weight: 900;
             }
             QPushButton#BtnMeasureBase:hover { background-color: #d1fae5; }
@@ -1037,5 +1046,5 @@ def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
     if font_id != -1:
         QFontDatabase.applicationFontFamilies(font_id)[0]
     window = CareKeeperWindow(provider, mode_name=mode_name)
-    window.show()
+    window.showFullScreen()
     sys.exit(app.exec())
