@@ -76,6 +76,12 @@ class CareKeeperProvider:
     def connect_bluetooth(self, address: str) -> bool:
         raise NotImplementedError
 
+    def reboot_device(self) -> bool:
+        raise NotImplementedError
+
+    def shutdown_device(self) -> bool:
+        raise NotImplementedError
+
 
 class MockCareKeeperProvider(CareKeeperProvider):
     """Development provider for UI preview without real hardware."""
@@ -139,6 +145,14 @@ class MockCareKeeperProvider(CareKeeperProvider):
 
     def connect_bluetooth(self, address: str) -> bool:
         print(f"[Mock Bluetooth] connect to {address}")
+        return True
+
+    def reboot_device(self) -> bool:
+        print("[Mock] Reboot device")
+        return True
+
+    def shutdown_device(self) -> bool:
+        print("[Mock] Shutdown device")
         return True
 
 
@@ -345,3 +359,23 @@ class RealCareKeeperProvider(CareKeeperProvider):
         except subprocess.CalledProcessError as e:
             message = e.stderr.strip() or e.stdout.strip() or str(e)
             raise RuntimeError(f"เชื่อมต่อ Bluetooth ไม่สำเร็จ: {message}")
+
+    def reboot_device(self) -> bool:
+        try:
+            subprocess.run(["systemctl", "reboot"], check=True, capture_output=True, text=True)
+            return True
+        except subprocess.CalledProcessError as e:
+            message = e.stderr.strip() or e.stdout.strip() or str(e)
+            raise RuntimeError(f"รีสตาร์ทเครื่องไม่สำเร็จ: {message}")
+        except Exception as e:
+            raise RuntimeError(f"รีสตาร์ทเครื่องไม่สำเร็จ: {e}")
+
+    def shutdown_device(self) -> bool:
+        try:
+            subprocess.run(["systemctl", "poweroff"], check=True, capture_output=True, text=True)
+            return True
+        except subprocess.CalledProcessError as e:
+            message = e.stderr.strip() or e.stdout.strip() or str(e)
+            raise RuntimeError(f"ปิดเครื่องไม่สำเร็จ: {message}")
+        except Exception as e:
+            raise RuntimeError(f"ปิดเครื่องไม่สำเร็จ: {e}")

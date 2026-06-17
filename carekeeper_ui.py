@@ -305,7 +305,24 @@ class CareKeeperWindow(QMainWindow):
         root.setObjectName("RootBg")
         outer = QVBoxLayout(root)
         outer.setContentsMargins(20, 20, 20, 20)
-        outer.setAlignment(Qt.AlignCenter)
+        outer.setSpacing(0)
+
+        top_row = QHBoxLayout()
+        top_row.addStretch()
+        self.btn_power = QPushButton("⏻")
+        self.btn_power.setObjectName("BtnPower")
+        self.btn_power.setFixedSize(56, 56)
+        self.btn_power.setCursor(Qt.PointingHandCursor)
+        self.btn_power.setToolTip("รีสตาร์ท / ปิดเครื่อง")
+        self.btn_power.clicked.connect(self._open_power_menu)
+        self._add_soft_shadow(self.btn_power)
+        top_row.addWidget(self.btn_power)
+        outer.addLayout(top_row)
+
+        outer.addStretch(1)
+
+        center_row = QHBoxLayout()
+        center_row.addStretch(1)
 
         card, layout = self._make_card("WelcomeCard")
         card.setFixedSize(700, 470)
@@ -338,7 +355,12 @@ class CareKeeperWindow(QMainWindow):
         layout.addSpacing(44)
         layout.addWidget(self.btn_card)
 
-        outer.addWidget(card)
+        center_row.addWidget(card)
+        center_row.addStretch(1)
+        outer.addLayout(center_row)
+
+        outer.addStretch(1)
+
         self.stack.addWidget(root)
 
     def _build_dashboard_page(self) -> None:
@@ -782,6 +804,58 @@ class CareKeeperWindow(QMainWindow):
         ok = bool(dialog.exec())
         return dialog.textValue(), ok
 
+    def _open_power_menu(self) -> None:
+        box = QMessageBox(self)
+        box.setWindowTitle("รีสตาร์ท / ปิดเครื่อง")
+        box.setText("ต้องการดำเนินการใด?")
+        box.setIcon(QMessageBox.Question)
+        btn_reboot = box.addButton("รีสตาร์ทเครื่อง", QMessageBox.ActionRole)
+        btn_shutdown = box.addButton("ปิดเครื่อง", QMessageBox.DestructiveRole)
+        btn_cancel = box.addButton("ยกเลิก", QMessageBox.RejectRole)
+        box.setDefaultButton(btn_cancel)
+        box.setStyleSheet(
+            """
+            QMessageBox { background-color: #ffffff; }
+            QLabel { font-size: 21px; font-weight: 700; color: #0b1f33; }
+            QPushButton {
+                font-size: 19px;
+                font-weight: 800;
+                min-height: 48px;
+                min-width: 150px;
+                border-radius: 12px;
+                background-color: #eef2f6;
+                color: #0b1f33;
+                border: 2px solid #9ec9d6;
+                padding: 4px 10px;
+            }
+            QPushButton:hover { background-color: #dbe7ee; }
+            """
+        )
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked == btn_reboot:
+            self._do_reboot()
+        elif clicked == btn_shutdown:
+            self._do_shutdown()
+
+    def _do_reboot(self) -> None:
+        self.btn_power.setEnabled(False)
+        self._show_toast("กำลังรีสตาร์ทเครื่อง...", success=True, duration_ms=4000)
+        self._start_task(self.provider.reboot_device, self._on_power_action_done, self._on_power_action_failed)
+
+    def _do_shutdown(self) -> None:
+        self.btn_power.setEnabled(False)
+        self._show_toast("กำลังปิดเครื่อง...", success=True, duration_ms=4000)
+        self._start_task(self.provider.shutdown_device, self._on_power_action_done, self._on_power_action_failed)
+
+    def _on_power_action_done(self, result: object) -> None:
+        # เครื่องกำลังจะรีสตาร์ท/ปิดตัวเอง ไม่ต้องอัปเดต UI เพิ่ม
+        pass
+
+    def _on_power_action_failed(self, message: str) -> None:
+        self.btn_power.setEnabled(True)
+        self._show_toast(f"ดำเนินการไม่สำเร็จ: {message}", success=False, duration_ms=3000)
+
     def _open_wifi_selector(self) -> None:
         self._show_toast("กำลังสแกน Wi-Fi...", success=True, duration_ms=1200)
         self._start_task(self.provider.scan_wifi_networks, self._on_wifi_scan_done, self._on_wifi_action_failed)
@@ -1034,7 +1108,7 @@ class CareKeeperWindow(QMainWindow):
                 padding-left: 4px;
             }
             QLabel#ValueBP {
-                font-size: 56px;
+                font-size: 46px;
                 font-weight: 900;
                 color: #1d4ed8;
                 letter-spacing: -1.2px;
@@ -1067,6 +1141,20 @@ class CareKeeperWindow(QMainWindow):
                 font-weight: 900;
             }
             QPushButton#BtnWelcomeAction:hover { background-color: #0b7476; }
+
+            QPushButton#BtnPower {
+                background-color: #ffffff;
+                color: #475569;
+                border: 2px solid #9ec9d6;
+                border-radius: 28px;
+                font-size: 26px;
+                font-weight: 900;
+            }
+            QPushButton#BtnPower:hover {
+                background-color: #fee2e2;
+                color: #b91c1c;
+                border-color: #fca5a5;
+            }
 
             QPushButton#BtnMeasureBase {
                 background-color: #e3f9f1;
