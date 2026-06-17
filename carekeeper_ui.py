@@ -65,7 +65,7 @@ class WifiIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.connected = False
-        self.scale = 1.5  
+        self.scale = 2.2  
         self.setFixedSize(int(26 * self.scale), int(20 * self.scale))
         self.setCursor(Qt.PointingHandCursor)
 
@@ -103,7 +103,7 @@ class BluetoothIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.connected = False
-        self.scale = 1.5  
+        self.scale = 2.2  
         self.setFixedSize(int(20 * self.scale), int(20 * self.scale))
         self.setCursor(Qt.PointingHandCursor)
 
@@ -724,6 +724,64 @@ class CareKeeperWindow(QMainWindow):
         self.wifi_indicator.set_connected(result.wifi_connected)
         self.bluetooth_indicator.set_connected(result.bluetooth_connected)
 
+    def _styled_input_dialog(self, title: str) -> QInputDialog:
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setMinimumSize(620, 460)
+        dialog.setStyleSheet(
+            """
+            QInputDialog { background-color: #ffffff; }
+            QLabel { font-size: 22px; font-weight: 700; color: #0b1f33; }
+            QComboBox {
+                font-size: 22px;
+                min-height: 56px;
+                padding: 6px 14px;
+                border: 2px solid #9ec9d6;
+                border-radius: 10px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 22px;
+                min-height: 50px;
+                selection-background-color: #d1fae5;
+                selection-color: #0b1f33;
+            }
+            QLineEdit {
+                font-size: 22px;
+                min-height: 56px;
+                padding: 6px 14px;
+                border: 2px solid #9ec9d6;
+                border-radius: 10px;
+            }
+            QPushButton {
+                font-size: 20px;
+                font-weight: 800;
+                min-height: 52px;
+                min-width: 130px;
+                border-radius: 12px;
+                background-color: #0f8b8d;
+                color: #ffffff;
+                border: none;
+            }
+            QPushButton:hover { background-color: #0b7476; }
+            """
+        )
+        return dialog
+
+    def _select_from_list(self, title: str, label: str, items: list[str]) -> tuple[str, bool]:
+        dialog = self._styled_input_dialog(title)
+        dialog.setComboBoxItems(items)
+        dialog.setLabelText(label)
+        dialog.setComboBoxEditable(False)
+        ok = bool(dialog.exec())
+        return dialog.textValue(), ok
+
+    def _ask_password(self, title: str, label: str) -> tuple[str, bool]:
+        dialog = self._styled_input_dialog(title)
+        dialog.setLabelText(label)
+        dialog.setTextEchoMode(QLineEdit.Password)
+        ok = bool(dialog.exec())
+        return dialog.textValue(), ok
+
     def _open_wifi_selector(self) -> None:
         self._show_toast("กำลังสแกน Wi-Fi...", success=True, duration_ms=1200)
         self._start_task(self.provider.scan_wifi_networks, self._on_wifi_scan_done, self._on_wifi_action_failed)
@@ -734,16 +792,11 @@ class CareKeeperWindow(QMainWindow):
             self._show_toast("ไม่พบ Wi-Fi ที่เลือกได้", success=False)
             return
 
-        ssid, ok = QInputDialog.getItem(self, "เลือก Wi-Fi", "Wi-Fi network:", networks, 0, False)
+        ssid, ok = self._select_from_list("เลือก Wi-Fi", "Wi-Fi network:", networks)
         if not ok or not ssid:
             return
 
-        password, ok = QInputDialog.getText(
-            self,
-            "รหัสผ่าน Wi-Fi",
-            f"Password for {ssid}:",
-            QLineEdit.Password,
-        )
+        password, ok = self._ask_password("รหัสผ่าน Wi-Fi", f"Password for {ssid}:")
         if not ok:
             return
 
@@ -769,7 +822,7 @@ class CareKeeperWindow(QMainWindow):
             return
 
         labels = [f"{name} ({address})" for name, address in devices]
-        selected, ok = QInputDialog.getItem(self, "เลือก Bluetooth", "Bluetooth device:", labels, 0, False)
+        selected, ok = self._select_from_list("เลือก Bluetooth", "Bluetooth device:", labels)
         if not ok or not selected:
             return
 
@@ -981,7 +1034,7 @@ class CareKeeperWindow(QMainWindow):
                 padding-left: 4px;
             }
             QLabel#ValueBP {
-                font-size: 46px;
+                font-size: 56px;
                 font-weight: 900;
                 color: #1d4ed8;
                 letter-spacing: -1.2px;
