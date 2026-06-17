@@ -166,6 +166,59 @@ class ToastLabel(QLabel):
         self.hide()
 
 
+class PopupOverlay(QWidget):
+    """Full-window dimmed overlay with a centered message card (used for important confirmations)."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet("background-color: rgba(11, 31, 51, 165);")
+        self.setCursor(Qt.PointingHandCursor)
+
+        outer = QVBoxLayout(self)
+        outer.setAlignment(Qt.AlignCenter)
+
+        self.card = QFrame(self)
+        self.card.setObjectName("PopupCard")
+        self.card.setMinimumWidth(420)
+        self.card.setMaximumWidth(620)
+
+        card_layout = QVBoxLayout(self.card)
+        card_layout.setContentsMargins(48, 40, 48, 40)
+        card_layout.setSpacing(16)
+        card_layout.setAlignment(Qt.AlignCenter)
+
+        self.icon_label = QLabel(self.card)
+        self.icon_label.setAlignment(Qt.AlignCenter)
+
+        self.message_label = QLabel(self.card)
+        self.message_label.setAlignment(Qt.AlignCenter)
+        self.message_label.setWordWrap(True)
+
+        card_layout.addWidget(self.icon_label)
+        card_layout.addWidget(self.message_label)
+        outer.addWidget(self.card)
+
+        self.hide()
+
+    def show_message(self, message: str, success: bool = True) -> None:
+        accent = "#0ea672" if success else "#dc2626"
+        self.icon_label.setText("✓" if success else "✕")
+        self.icon_label.setStyleSheet(
+            f"font-size:64px; font-weight:900; color:{accent}; background:transparent;"
+        )
+        self.message_label.setText(message)
+        self.message_label.setStyleSheet(
+            "font-size:24px; font-weight:800; color:#0b1f33; background:transparent;"
+        )
+        self.card.setStyleSheet(
+            f"QFrame#PopupCard {{ background:#ffffff; border-radius:24px; border:3px solid {accent}; }}"
+        )
+
+    def mousePressEvent(self, event) -> None:
+        self.hide()
+
+
 class CareKeeperWindow(QMainWindow):
     def __init__(self, provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
         super().__init__()
@@ -222,6 +275,15 @@ class CareKeeperWindow(QMainWindow):
         self.toast.setWordWrap(True)
         self.toast.setCursor(Qt.PointingHandCursor)
         self.toast.hide()
+
+        self.popup_overlay = PopupOverlay(self)
+
+    def _show_popup(self, message: str, success: bool = True, duration_ms: int = 2200) -> None:
+        self.popup_overlay.show_message(message, success=success)
+        self.popup_overlay.setGeometry(self.rect())
+        self.popup_overlay.raise_()
+        self.popup_overlay.show()
+        QTimer.singleShot(duration_ms, self.popup_overlay.hide)
 
     def _show_toast(self, message: str, success: bool = True, duration_ms: int = 2000) -> None:
         background = "#d1fae5" if success else "#fee2e2"
@@ -506,7 +568,7 @@ class CareKeeperWindow(QMainWindow):
 
         pulse_label = None
         if has_pulse:
-            layout.addSpacing(6)
+            layout.addSpacing(22)
             layout.addWidget(self._tag("ชีพจร (PULSE)"))
             
             row_pulse = QHBoxLayout()
@@ -919,7 +981,7 @@ class CareKeeperWindow(QMainWindow):
                 padding-left: 4px;
             }
             QLabel#ValueBP {
-                font-size: 56px;
+                font-size: 46px;
                 font-weight: 900;
                 color: #1d4ed8;
                 letter-spacing: -1.2px;
@@ -1032,13 +1094,13 @@ class CareKeeperWindow(QMainWindow):
     def _on_submit_success(self, result: object) -> None:
         self.btn_finish.setEnabled(True)
         self.btn_finish.setText("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
-        self._show_toast("ส่งข้อมูลสำเร็จ", success=True)
+        self._show_popup("ส่งข้อมูลสำเร็จ", success=True)
         QTimer.singleShot(2000, self._reset_session)
 
     def _on_submit_failed(self, message: str) -> None:
         self.btn_finish.setEnabled(True)
         self.btn_finish.setText("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
-        self._show_toast(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False, duration_ms=3000)
+        self._show_popup(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False, duration_ms=3000)
 
 
 def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
