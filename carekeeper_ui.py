@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from PySide6.QtCore import QThread, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QBrush
+from PySide6.QtGui import QColor, QPainter, QPen, QBrush , QFontDatabase
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -65,7 +65,8 @@ class WifiIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.connected = False
-        self.setFixedSize(26, 20)
+        self.scale = 1.5  
+        self.setFixedSize(int(26 * self.scale), int(20 * self.scale))
         self.setCursor(Qt.PointingHandCursor)
 
     def mousePressEvent(self, event) -> None:
@@ -79,9 +80,11 @@ class WifiIndicator(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
+
         color = QColor("#0f8b8d") if self.connected else QColor("#cbd5e1")
-        cx = self.width() / 2
-        cy = self.height() - 3
+        cx = 26 / 2  # ล็อกพิกัดเดิมไว้ไม่ให้เพี้ยน
+        cy = 20 - 3
 
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(color))
@@ -100,7 +103,8 @@ class BluetoothIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.connected = False
-        self.setFixedSize(20, 20)
+        self.scale = 1.5  
+        self.setFixedSize(int(20 * self.scale), int(20 * self.scale))
         self.setCursor(Qt.PointingHandCursor)
 
     def mousePressEvent(self, event) -> None:
@@ -114,6 +118,8 @@ class BluetoothIndicator(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
+
         color = QColor("#0f8b8d") if self.connected else QColor("#cbd5e1")
         painter.setPen(QPen(color, 1.8, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.drawLine(10, 3, 10, 17)
@@ -127,7 +133,8 @@ class BatteryIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.percent = 0
-        self.setFixedSize(30, 15)
+        self.scale = 1.5  
+        self.setFixedSize(int(30 * self.scale), int(15 * self.scale))
 
     def set_percent(self, percent: int) -> None:
         self.percent = max(0, min(100, percent))
@@ -136,6 +143,7 @@ class BatteryIndicator(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
 
         border = QColor("#16324f")
         fill = QColor("#0f8b8d") if self.percent > 20 else QColor("#94a3b8")
@@ -827,7 +835,7 @@ class CareKeeperWindow(QMainWindow):
     def _apply_styles(self) -> None:
         self.setStyleSheet(
             """
-            * { font-family: Arial, Kanit, sans-serif; font-size: 19px; }
+            * { font-family: "Prompt", sans-serif; font-size: 19px; }
             QWidget#RootBg { background-color: #f7fbff; }
 
             QFrame#WelcomeCard {
@@ -870,7 +878,7 @@ class CareKeeperWindow(QMainWindow):
                 color: #475569;
             }
             QLabel#BatteryLabel {
-                font-size: 16px;
+                font-size: 20px;
                 font-weight: 800;
                 color: #16324f;
             }
@@ -909,19 +917,19 @@ class CareKeeperWindow(QMainWindow):
             QLabel#ValuePulse {
                 font-size: 42px;
                 font-weight: 900;
-                color: #0891b2;
+                color: #2563eb;
                 letter-spacing: -0.6px;
             }
             QLabel#ValueSpO2 {
                 font-size: 52px;
                 font-weight: 900;
-                color: #059669;
+                color: #2563eb;
                 letter-spacing: -1.2px;
             }
             QLabel#ValueTemp {
                 font-size: 52px;
                 font-weight: 900;
-                color: #0ea5e9;
+                color: #2563eb;
                 letter-spacing: -1.2px;
             }
 
@@ -1025,6 +1033,9 @@ class CareKeeperWindow(QMainWindow):
 
 def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
     app = QApplication(sys.argv)
+    font_id = QFontDatabase.addApplicationFont("NotoSansThai-Regular.ttf")
+    if font_id != -1:
+        QFontDatabase.applicationFontFamilies(font_id)[0]
     window = CareKeeperWindow(provider, mode_name=mode_name)
     window.show()
     sys.exit(app.exec())
