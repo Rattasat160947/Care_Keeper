@@ -5,10 +5,3 @@ pyserial
 pyscard
 requests
 python-dotenv
-
-# Raspberry Pi hardware notes:
-# lib/ups.py imports smbus. Install it on Raspberry Pi with:
-# sudo apt install python3-smbus i2c-tools
-#
-# Bluetooth / smart card support may also need system packages:
-# sudo apt install bluetooth bluez pcscd libpcsclite-dev
