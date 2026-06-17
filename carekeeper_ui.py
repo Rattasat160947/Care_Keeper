@@ -246,8 +246,8 @@ class CareKeeperWindow(QMainWindow):
         outer.setAlignment(Qt.AlignCenter)
 
         card, layout = self._make_card("WelcomeCard")
-        card.setFixedSize(540, 360)
-        layout.setContentsMargins(50, 45, 50, 45)
+        card.setFixedSize(700, 470)
+        layout.setContentsMargins(70, 60, 70, 60)
         layout.setAlignment(Qt.AlignCenter)
 
         logo = QLabel("CareKeeper")
@@ -265,15 +265,15 @@ class CareKeeperWindow(QMainWindow):
 
         self.btn_card = QPushButton("เริ่มอ่านข้อมูลบัตร")
         self.btn_card.setObjectName("BtnWelcomeAction")
-        self.btn_card.setFixedHeight(52)
+        self.btn_card.setFixedHeight(64)
         self.btn_card.clicked.connect(self._read_card)
 
         layout.addWidget(logo)
-        layout.addSpacing(18)
+        layout.addSpacing(22)
         layout.addWidget(title)
-        layout.addSpacing(8)
+        layout.addSpacing(12)
         layout.addWidget(subtitle)
-        layout.addSpacing(35)
+        layout.addSpacing(44)
         layout.addWidget(self.btn_card)
 
         outer.addWidget(card)
@@ -334,10 +334,9 @@ class CareKeeperWindow(QMainWindow):
         row_spo2.addWidget(self.lbl_spo2_value)
         row_spo2.addWidget(self._unit("%"))
         row_spo2.addStretch()
-        spo2.addStretch(1)
         spo2.addLayout(row_spo2)
         
-        spo2.addStretch(2)
+        spo2.addStretch()
         self.btn_spo2 = self._measure_button("วัดออกซิเจน")
         self.btn_spo2.clicked.connect(self._measure_spo2)
         spo2.addWidget(self.btn_spo2)
@@ -353,10 +352,9 @@ class CareKeeperWindow(QMainWindow):
         row_temp.addWidget(self.lbl_temp_value)
         row_temp.addWidget(self._unit("°C"))
         row_temp.addStretch()
-        temp.addStretch(1)
         temp.addLayout(row_temp)
         
-        temp.addStretch(2)
+        temp.addStretch()
         self.btn_temp = self._measure_button("วัดอุณหภูมิ")
         self.btn_temp.clicked.connect(self._measure_temperature)
         temp.addWidget(self.btn_temp)
@@ -853,18 +851,18 @@ class CareKeeperWindow(QMainWindow):
                 border: 1px solid #d8ecf3;
             }
             QLabel#WelcomeLogo {
-                font-size: 28px;
+                font-size: 38px;
                 font-weight: 800;
                 color: #0f8b8d;
                 letter-spacing: 0.8px;
             }
             QLabel#WelcomeTitle {
-                font-size: 28px;
+                font-size: 36px;
                 font-weight: 700;
                 color: #16324f;
             }
             QLabel#WelcomeSub {
-                font-size: 19px;
+                font-size: 24px;
                 color: #334155;
             }
 
@@ -930,13 +928,13 @@ class CareKeeperWindow(QMainWindow):
                 letter-spacing: -0.6px;
             }
             QLabel#ValueSpO2 {
-                font-size: 68px;
+                font-size: 52px;
                 font-weight: 900;
                 color: #2563eb;
                 letter-spacing: -1.2px;
             }
             QLabel#ValueTemp {
-                font-size: 68px;
+                font-size: 52px;
                 font-weight: 900;
                 color: #2563eb;
                 letter-spacing: -1.2px;
@@ -947,7 +945,7 @@ class CareKeeperWindow(QMainWindow):
                 color: #ffffff;
                 border: none;
                 border-radius: 14px;
-                font-size: 19px;
+                font-size: 24px;
                 font-weight: 800;
             }
             QPushButton#BtnWelcomeAction:hover { background-color: #0b7476; }
