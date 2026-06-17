@@ -945,13 +945,13 @@ class CareKeeperWindow(QMainWindow):
 
             QPushButton#BtnMeasureBase {
                 background-color: #ecf8fb;
-                color: #0f8b8d;
-                border: 1px solid #b9e3da;
+                color: #047857;
+                border: 2px solid #34d399;
                 border-radius: 10px;
-                font-size: 16px;
-                font-weight: 800;
+                font-size: 18px;
+                font-weight: 900;
             }
-            QPushButton#BtnMeasureBase:hover { background-color: #dff5ef; }
+            QPushButton#BtnMeasureBase:hover { background-color: #d1fae5; }
             QPushButton#BtnMeasureBase:disabled {
                 background-color: #f8fafc;
                 color: #94a3b8;
@@ -978,11 +978,11 @@ class CareKeeperWindow(QMainWindow):
 
             QPushButton#BtnSecondary {
                 background-color: #ffffff;
-                color: #0f8b8d;
-                border: 1px solid #b9e3da;
+                color: #047857;
+                border: 2px solid #34d399;
                 border-radius: 10px;
-                font-size: 16px;
-                font-weight: 700;
+                font-size: 18px;
+                font-weight: 800;
             }
             QPushButton#BtnSecondary:hover { background-color: #ecf8fb; }
 
