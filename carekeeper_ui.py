@@ -82,7 +82,7 @@ class WifiIndicator(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
 
-        color = QColor("#0f8b8d") if self.connected else QColor("#cbd5e1")
+        color = QColor("#0f8b8d") if self.connected else QColor("#7c92a4")
         cx = 26 / 2  # ล็อกพิกัดเดิมไว้ไม่ให้เพี้ยน
         cy = 20 - 3
 
@@ -120,7 +120,7 @@ class BluetoothIndicator(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
 
-        color = QColor("#0f8b8d") if self.connected else QColor("#cbd5e1")
+        color = QColor("#0f8b8d") if self.connected else QColor("#7c92a4")
         painter.setPen(QPen(color, 1.8, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.drawLine(10, 3, 10, 17)
         painter.drawLine(10, 3, 15, 7)
@@ -146,7 +146,7 @@ class BatteryIndicator(QWidget):
         painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
 
         border = QColor("#16324f")
-        fill = QColor("#0f8b8d") if self.percent > 20 else QColor("#94a3b8")
+        fill = QColor("#0f8b8d") if self.percent > 20 else QColor("#64748b")
         painter.setPen(QPen(border, 1.2))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(1, 1, 24, 13, 3, 3)
@@ -202,9 +202,9 @@ class CareKeeperWindow(QMainWindow):
 
     def _add_soft_shadow(self, widget: QWidget) -> None:
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setColor(QColor(15, 23, 42, 18))
-        shadow.setOffset(0, 6)
+        shadow.setBlurRadius(28)
+        shadow.setColor(QColor(15, 23, 42, 60))
+        shadow.setOffset(0, 8)
         widget.setGraphicsEffect(shadow)
 
     def _make_card(self, object_name: str = "Card") -> tuple[QFrame, QVBoxLayout]:
@@ -378,8 +378,8 @@ class CareKeeperWindow(QMainWindow):
         root = QWidget()
         root.setObjectName("RootBg")
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
 
         layout.addWidget(self._build_patient_header(summary=True))
 
@@ -388,7 +388,7 @@ class CareKeeperWindow(QMainWindow):
         layout.addWidget(title)
 
         grid = QGridLayout()
-        grid.setSpacing(12)
+        grid.setSpacing(16)
 
         bp_card, self.sum_bp_value, self.sum_pulse_value, self.sum_bp_badge = self._summary_card(
             "ความดันโลหิต (BLOOD PRESSURE)",
@@ -785,19 +785,19 @@ class CareKeeperWindow(QMainWindow):
 
     def _refresh_summary_badges(self) -> None:
         if self.vitals.systolic is not None and self.vitals.diastolic is not None:
-            self._set_badge(self.sum_bp_badge, "วัดเสร็จสิ้น", "#047857", "#d1fae5")
+            self._set_badge(self.sum_bp_badge, "วัดเสร็จสิ้น", "#047857", "#bbf7d0")
         else:
-            self._set_badge(self.sum_bp_badge, "ยังไม่มีข้อมูล", "#64748b", "#f1f5f9")
+            self._set_badge(self.sum_bp_badge, "ยังไม่มีข้อมูล", "#334155", "#dbe7ee")
 
         if self.vitals.spo2 is not None:
-            self._set_badge(self.sum_spo2_badge, "วัดเสร็จสิ้น", "#047857", "#d1fae5")
+            self._set_badge(self.sum_spo2_badge, "วัดเสร็จสิ้น", "#047857", "#bbf7d0")
         else:
-            self._set_badge(self.sum_spo2_badge, "ยังไม่มีข้อมูล", "#64748b", "#f1f5f9")
+            self._set_badge(self.sum_spo2_badge, "ยังไม่มีข้อมูล", "#334155", "#dbe7ee")
 
         if self.vitals.temperature is not None:
-            self._set_badge(self.sum_temp_badge, "วัดเสร็จสิ้น", "#047857", "#d1fae5")
+            self._set_badge(self.sum_temp_badge, "วัดเสร็จสิ้น", "#047857", "#bbf7d0")
         else:
-            self._set_badge(self.sum_temp_badge, "ยังไม่มีข้อมูล", "#64748b", "#f1f5f9")
+            self._set_badge(self.sum_temp_badge, "ยังไม่มีข้อมูล", "#334155", "#dbe7ee")
 
     def _show_summary(self) -> None:
         self._refresh_values()
@@ -836,107 +836,110 @@ class CareKeeperWindow(QMainWindow):
         label.setText(text)
         label.setStyleSheet(
             f"color:{color}; background:{background}; border-radius:10px; "
-            "font-size:13px; font-weight:600; padding:4px 12px;"
+            "border: 2px solid transparent; font-size:15px; font-weight:800; padding:4px 12px;"
         )
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(
             """
-            * { font-family: "Prompt", sans-serif; font-size: 19px; }
-            QWidget#RootBg { background-color: #f7fbff; }
+            * { font-family: "Prompt", sans-serif; font-size: 19px; color: #0b1f33; }
+            QWidget#RootBg { background-color: #e9f1f7; }
 
             QFrame#WelcomeCard {
                 background: #ffffff;
                 border-radius: 24px;
-                border: 1px solid #d8ecf3;
+                border: 3px solid #0f8b8d;
             }
             QLabel#WelcomeLogo {
                 font-size: 38px;
-                font-weight: 800;
+                font-weight: 900;
                 color: #0f8b8d;
                 letter-spacing: 0.8px;
             }
             QLabel#WelcomeTitle {
                 font-size: 36px;
-                font-weight: 700;
-                color: #16324f;
+                font-weight: 800;
+                color: #0b1f33;
             }
             QLabel#WelcomeSub {
                 font-size: 24px;
-                color: #334155;
+                font-weight: 600;
+                color: #1e293b;
             }
 
             QFrame#Header {
                 background: #ffffff;
                 border-radius: 16px;
-                border: 1px solid #d8ecf3;
+                border: 2px solid #9ec9d6;
             }
             QLabel#HeaderName {
                 font-size: 20px;
-                font-weight: 800;
-                color: #16324f;
+                font-weight: 900;
+                color: #0b1f33;
             }
             QLabel#HeaderSub {
                 font-size: 16px;
-                color: #334155;
+                font-weight: 700;
+                color: #1e293b;
             }
             QLabel#HeaderAddress {
                 font-size: 15px;
-                color: #475569;
+                font-weight: 600;
+                color: #334155;
             }
             QLabel#BatteryLabel {
                 font-size: 20px;
-                font-weight: 800;
-                color: #16324f;
+                font-weight: 900;
+                color: #0b1f33;
             }
             QLabel#SumTitle {
                 font-size: 20px;
-                font-weight: 700;
-                color: #16324f;
+                font-weight: 800;
+                color: #0b1f33;
                 padding-left: 2px;
             }
 
             QFrame#Card {
                 background: #ffffff;
                 border-radius: 20px;
-                border: 1px solid #d8ecf3;
+                border: 2px solid #9ec9d6;
                 min-height: 245px;
             }
             QLabel#CardTag {
                 font-size: 18px;
-                font-weight: 800;
+                font-weight: 900;
                 letter-spacing: 0.5px;
-                color: #334155;
+                color: #0b1f33;
             }
             QLabel#CardUnit {
                 font-size: 20px;
-                font-weight: 700;
-                color: #64748b;
+                font-weight: 800;
+                color: #334155;
                 padding-bottom: 8px; /* ดันให้ฐานตัวอักษรเสมอกับตัวเลขใหญ่ๆ */
                 padding-left: 4px;
             }
             QLabel#ValueBP {
                 font-size: 56px;
                 font-weight: 900;
-                color: #2563eb;
+                color: #1d4ed8;
                 letter-spacing: -1.2px;
             }
             QLabel#ValuePulse {
                 font-size: 46px;
                 font-weight: 900;
-                color: #2563eb;
+                color: #1d4ed8;
                 letter-spacing: -0.6px;
             }
             QLabel#ValueSpO2 {
                 font-size: 52px;
                 font-weight: 900;
-                color: #2563eb;
+                color: #1d4ed8;
                 letter-spacing: -1.2px;
             }
             QLabel#ValueTemp {
                 font-size: 52px;
                 font-weight: 900;
-                color: #2563eb;
+                color: #1d4ed8;
                 letter-spacing: -1.2px;
             }
 
@@ -946,62 +949,62 @@ class CareKeeperWindow(QMainWindow):
                 border: none;
                 border-radius: 14px;
                 font-size: 24px;
-                font-weight: 800;
+                font-weight: 900;
             }
             QPushButton#BtnWelcomeAction:hover { background-color: #0b7476; }
 
             QPushButton#BtnMeasureBase {
-                background-color: #ecf8fb;
-                color: #047857;
-                border: 2px solid #34d399;
+                background-color: #e3f9f1;
+                color: #03543f;
+                border: 3px solid #0ea672;
                 border-radius: 10px;
                 font-size: 19px;
                 font-weight: 900;
             }
-            QPushButton#BtnMeasureBase:hover { background-color: #d1fae5; }
+            QPushButton#BtnMeasureBase:hover { background-color: #bbf7d0; }
             QPushButton#BtnMeasureBase:disabled {
-                background-color: #f8fafc;
-                color: #94a3b8;
-                border-color: #dbe7ee;
+                background-color: #eef2f6;
+                color: #64748b;
+                border-color: #b6c4d0;
             }
 
             QPushButton#BtnSummaryDisabled {
-                background-color: #dbe7ee;
-                color: #7c92a4;
+                background-color: #c3d3dd;
+                color: #41596b;
                 border: none;
                 border-radius: 14px;
                 font-size: 18px;
                 font-weight: 800;
             }
             QPushButton#BtnSummaryReady {
-                background-color: #2563eb;
+                background-color: #1d4ed8;
                 color: #ffffff;
                 border: none;
                 border-radius: 14px;
                 font-size: 18px;
-                font-weight: 800;
+                font-weight: 900;
             }
-            QPushButton#BtnSummaryReady:hover { background-color: #1d4ed8; }
+            QPushButton#BtnSummaryReady:hover { background-color: #1741b8; }
 
             QPushButton#BtnSecondary {
                 background-color: #ffffff;
-                color: #047857;
-                border: 2px solid #34d399;
+                color: #03543f;
+                border: 3px solid #0ea672;
                 border-radius: 10px;
                 font-size: 18px;
-                font-weight: 800;
+                font-weight: 900;
             }
-            QPushButton#BtnSecondary:hover { background-color: #ecf8fb; }
+            QPushButton#BtnSecondary:hover { background-color: #e3f9f1; }
 
             QPushButton#BtnFinish {
-                background-color: #16324f;
+                background-color: #0b1f33;
                 color: #ffffff;
                 border: none;
                 border-radius: 14px;
                 font-size: 18px;
-                font-weight: 700;
+                font-weight: 800;
             }
-            QPushButton#BtnFinish:hover { background-color: #0f253d; }
+            QPushButton#BtnFinish:hover { background-color: #061626; }
             """
         )
     
