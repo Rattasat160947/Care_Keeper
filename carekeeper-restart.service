@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart CareKeeper service (nightly, to keep memory/cache fresh on Pi5)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart carekeeper.service

@@ -1159,7 +1159,7 @@ class CareKeeperWindow(QMainWindow):
                 padding-left: 4px;
             }
             QLabel#ValueBP {
-                font-size: 56px;
+                font-size: 46px;
                 font-weight: 900;
                 color: #1d4ed8;
                 letter-spacing: -1.2px;

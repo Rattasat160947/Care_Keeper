@@ -5,6 +5,40 @@ from smartcard.CardConnection import CardConnection
 from .apdu import *
 
 
+THAI_MONTHS = {
+    1: "มกราคม",
+    2: "กุมภาพันธ์",
+    3: "มีนาคม",
+    4: "เมษายน",
+    5: "พฤษภาคม",
+    6: "มิถุนายน",
+    7: "กรกฎาคม",
+    8: "สิงหาคม",
+    9: "กันยายน",
+    10: "ตุลาคม",
+    11: "พฤศจิกายน",
+    12: "ธันวาคม",
+}
+
+
+def format_thai_birth_date(raw: str) -> str:
+
+    digits = raw.strip()
+
+    if len(digits) != 8 or not digits.isdigit():
+        return raw
+
+    year_be = int(digits[0:4])
+    month = int(digits[4:6])
+    day = int(digits[6:8])
+
+    month_name = THAI_MONTHS.get(month)
+    if not month_name or day == 0:
+        return raw
+
+    return f"{day} {month_name} {year_be}"
+
+
 @dataclass
 class CardInfo:
     cid: str
@@ -106,9 +140,10 @@ class ThaiIDCard:
 
     def get_birth_date(self):
 
-        return self._decode(
+        raw = self._decode(
             self._read_apdu(BIRTH)
         )
+        return format_thai_birth_date(raw)
 
     def get_address(self):
 

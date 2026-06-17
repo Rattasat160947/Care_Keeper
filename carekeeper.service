@@ -1,0 +1,18 @@
+[Unit]
+Description=CareKeeper Kiosk App
+After=graphical.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/carekeeper/main_real.py
+WorkingDirectory=/home/pi/carekeeper
+User=pi
+Restart=on-failure
+RestartSec=5
+Environment=DISPLAY=:0
+# ถ้าเครื่องนี้รันด้วย Wayland compositor (เช่น cage/wayfire) แทน X
+# ให้ลบ DISPLAY ด้านบนออก แล้วเปิด 2 บรรทัดนี้แทน (ปรับเลข user id ตามจริง)
+# Environment=WAYLAND_DISPLAY=wayland-0
+# Environment=XDG_RUNTIME_DIR=/run/user/1000
+
+[Install]
+WantedBy=graphical.target
