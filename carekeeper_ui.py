@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QRectF, QThread, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QBrush , QFontDatabase
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QBrush
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -34,6 +35,22 @@ from carekeeper_providers import (
 
 WINDOW_WIDTH = 1010
 WINDOW_HEIGHT = 503
+APP_FONT_FAMILY = "Noto Sans Thai"
+
+
+def _load_app_font(app: QApplication) -> str:
+    font_path = Path(__file__).resolve().parent / "IBMPlexSansThai-Regular.ttf"
+    family = APP_FONT_FAMILY
+
+    if font_path.exists():
+        font_id = QFontDatabase.addApplicationFont(str(font_path))
+        if font_id != -1:
+            families = QFontDatabase.applicationFontFamilies(font_id)
+            if families:
+                family = families[0]
+
+    app.setFont(QFont(family, 12))
+    return family
 
 
 @dataclass
@@ -1082,7 +1099,7 @@ class CareKeeperWindow(QMainWindow):
     def _apply_styles(self) -> None:
         self.setStyleSheet(
             """
-            * { font-family: "Prompt", sans-serif; font-size: 19px; color: #0b1f33; }
+            * { font-family: "__APP_FONT__", "Noto Sans Thai", sans-serif; font-size: 19px; color: #0b1f33; }
             QWidget#RootBg { background-color: #e9f1f7; }
 
             QFrame#WelcomeCard {
@@ -1246,6 +1263,7 @@ class CareKeeperWindow(QMainWindow):
             }
             QPushButton#BtnFinish:hover { background-color: #061626; }
             """
+            .replace("__APP_FONT__", APP_FONT_FAMILY)
         )
     
     # จัดการส่งข้อมูลเข้า Server
@@ -1282,10 +1300,10 @@ class CareKeeperWindow(QMainWindow):
 
 
 def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
+    global APP_FONT_FAMILY
+
     app = QApplication(sys.argv)
-    font_id = QFontDatabase.addApplicationFont("IBMPlexSansThai-Regular.ttf")
-    if font_id != -1:
-        QFontDatabase.applicationFontFamilies(font_id)[0]
+    APP_FONT_FAMILY = _load_app_font(app)
     window = CareKeeperWindow(provider, mode_name=mode_name)
     window.showFullScreen()
     sys.exit(app.exec())
