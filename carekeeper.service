@@ -1,11 +1,12 @@
 [Unit]
 Description=CareKeeper Kiosk App
-After=graphical.target
+After=graphical.target pcscd.service
+Wants=pcscd.service
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/carekeeper/main_real.py
-WorkingDirectory=/home/pi/carekeeper
-User=pi
+ExecStart=/home/cpe05/Care_Keeper/carekeeper/bin/python3 /home/cpe05/Care_Keeper/main_real.py
+WorkingDirectory=/home/cpe05/Care_Keeper
+User=cpe05
 Restart=on-failure
 RestartSec=5
 Environment=DISPLAY=:0
