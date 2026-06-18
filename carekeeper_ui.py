@@ -39,7 +39,7 @@ APP_FONT_FAMILY = "Noto Sans Thai"
 
 
 def _load_app_font(app: QApplication) -> str:
-    font_path = Path(__file__).resolve().parent / "IBMPlexSansThai-Regular.ttf"
+    font_path = Path(__file__).resolve().parent / "NotoSansThai-Regular.ttf"
     family = APP_FONT_FAMILY
 
     if font_path.exists():
