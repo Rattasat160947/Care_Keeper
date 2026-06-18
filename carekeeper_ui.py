@@ -1301,7 +1301,7 @@ class CareKeeperWindow(QMainWindow):
             }
             QLabel#HeaderNameNew { font-size: 26px; font-weight: 900; color: #0b1f33; }
             QLabel#HeaderCidNew { font-size: 24px; font-weight: 900; color: #007982; } /* สีเขียวอมฟ้าแบบในรูป */
-            QLabel#HeaderSubNew { font-size: 17px; font-weight: 600; color: #64748b; }
+            QLabel#HeaderSubNew { font-size: 17px; font-weight: 600; color: #0b1f33; }
             """
             .replace("__APP_FONT__", APP_FONT_FAMILY)
         )
