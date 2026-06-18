@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QRectF, QThread, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QBrush
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QBrush, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -35,19 +35,36 @@ from carekeeper_providers import (
 
 WINDOW_WIDTH = 1010
 WINDOW_HEIGHT = 503
+PROJECT_DIR = Path(__file__).resolve().parent
+STYLE_DIR = PROJECT_DIR / "style"
 APP_FONT_FAMILY = "Noto Sans Thai"
+ICON_BLOOD_PRESSURE = "heart-pulse-svgrepo-com.svg"
+ICON_SPO2 = "rain-drops-svgrepo-com.svg"
+ICON_TEMPERATURE = "thermometer-5-svgrepo-com.svg"
+
+
+def _style_asset(name: str) -> Path:
+    return STYLE_DIR / name
 
 
 def _load_app_font(app: QApplication) -> str:
-    font_path = Path(__file__).resolve().parent / "IBMPlexSansThai-Regular.ttf"
     family = APP_FONT_FAMILY
 
-    if font_path.exists():
+    font_candidates = (
+        STYLE_DIR / "IBMPlexSansThai-Regular.ttf",
+        PROJECT_DIR / "IBMPlexSansThai-Regular.ttf",
+        STYLE_DIR / "NotoSansThai-Regular.ttf",
+        PROJECT_DIR / "NotoSansThai-Regular.ttf",
+    )
+    for font_path in font_candidates:
+        if not font_path.exists():
+            continue
         font_id = QFontDatabase.addApplicationFont(str(font_path))
         if font_id != -1:
             families = QFontDatabase.applicationFontFamilies(font_id)
             if families:
                 family = families[0]
+                break
 
     app.setFont(QFont(family, 12))
     return family
@@ -475,39 +492,9 @@ class CareKeeperWindow(QMainWindow):
         bp.addLayout(self._card_header("❤", "#fee2e2", "#dc2626", "ความดันโลหิต & ชีพจร", "BLOOD PRESSURE & PULSE"))
         bp.addSpacing(12)
         
-        row_bp = QHBoxLayout()
-        col_sys = QVBoxLayout()
-        col_sys.setSpacing(0)
-        val_sys = QHBoxLayout()
-        val_sys.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
-        self.lbl_bp_value = self._value_label("-- / --", "ValueBP")
-        val_sys.addWidget(self.lbl_bp_value)
-        val_sys.addWidget(self._unit("mmHg"))
-        val_sys.addStretch()
-        col_sys.addLayout(val_sys)
-        col_sys.addWidget(self._unit("SYS / DIA"))
-        row_bp.addLayout(col_sys, 2)
-        
-        line = QFrame()
-        line.setFrameShape(QFrame.VLine)
-        line.setStyleSheet("border-left: 2px solid #e2e8f0;")
-        row_bp.addWidget(line)
-        row_bp.addSpacing(16)
-        
-        col_pulse = QVBoxLayout()
-        col_pulse.setSpacing(0)
-        col_pulse.addWidget(self._unit("HEART RATE"))
-        val_pulse = QHBoxLayout()
-        val_pulse.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
+        self.lbl_bp_value = self._value_label("--/--", "ValueBP")
         self.lbl_pulse_value = self._value_label("--", "ValuePulse")
-        val_pulse.addWidget(self.lbl_pulse_value)
-        val_pulse.addWidget(self._unit("bpm"))
-        val_pulse.addStretch()
-        col_pulse.addLayout(val_pulse)
-        row_bp.addLayout(col_pulse, 1)
-        
-        bp.addLayout(row_bp)
-        bp.addStretch(1)
+        bp.addWidget(self._bp_value_area(self.lbl_bp_value, self.lbl_pulse_value, "mmHg"), 1)
         self.btn_bp = self._measure_button("วัดความดัน (MEASURE)", "BtnBP")
         self.btn_bp.clicked.connect(self._measure_bp)
         bp.addWidget(self.btn_bp)
@@ -518,15 +505,8 @@ class CareKeeperWindow(QMainWindow):
         spo2.addLayout(self._card_header("💨", "#e0f2fe", "#0284c7", "ออกซิเจนในเลือด", "SPO2"))
         spo2.addSpacing(12)
         
-        row_spo2 = QHBoxLayout()
-        row_spo2.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
         self.lbl_spo2_value = self._value_label("--", "ValueSpO2")
-        row_spo2.addWidget(self.lbl_spo2_value)
-        row_spo2.addWidget(self._unit("%"))
-        row_spo2.addStretch()
-        spo2.addLayout(row_spo2)
-        
-        spo2.addStretch()
+        spo2.addWidget(self._single_value_area(self.lbl_spo2_value, "%"), 1)
         self.btn_spo2 = self._measure_button("วัดออกซิเจน (MEASURE)", "BtnSpO2")
         self.btn_spo2.clicked.connect(self._measure_spo2)
         spo2.addWidget(self.btn_spo2)
@@ -537,15 +517,8 @@ class CareKeeperWindow(QMainWindow):
         temp.addLayout(self._card_header("🌡", "#dcfce7", "#16a34a", "อุณหภูมิร่างกาย", "TEMPERATURE"))
         temp.addSpacing(12)
         
-        row_temp = QHBoxLayout()
-        row_temp.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
         self.lbl_temp_value = self._value_label("--", "ValueTemp")
-        row_temp.addWidget(self.lbl_temp_value)
-        row_temp.addWidget(self._unit("°C"))
-        row_temp.addStretch()
-        temp.addLayout(row_temp)
-        
-        temp.addStretch()
+        temp.addWidget(self._single_value_area(self.lbl_temp_value, "°C"), 1)
         self.btn_temp = self._measure_button("วัดอุณหภูมิ (MEASURE)", "BtnTemp")
         self.btn_temp.clicked.connect(self._measure_temperature)
         temp.addWidget(self.btn_temp)
@@ -698,47 +671,15 @@ class CareKeeperWindow(QMainWindow):
         layout.addLayout(self._card_header(icon, icon_bg, icon_color, title_th, title_en))
         layout.addSpacing(12)
         
-        row_val = QHBoxLayout()
         if has_pulse:
-            col_sys = QVBoxLayout()
-            col_sys.setSpacing(0)
-            val_sys = QHBoxLayout()
-            val_sys.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
-            value = self._value_label("-- / --", value_object_name)
-            val_sys.addWidget(value)
-            val_sys.addWidget(self._unit(unit))
-            val_sys.addStretch()
-            col_sys.addLayout(val_sys)
-            col_sys.addWidget(self._unit("SYS / DIA"))
-            row_val.addLayout(col_sys, 2)
-            
-            line = QFrame()
-            line.setFrameShape(QFrame.VLine)
-            line.setStyleSheet("border-left: 2px solid #e2e8f0;")
-            row_val.addWidget(line)
-            row_val.addSpacing(16)
-            
-            col_pulse = QVBoxLayout()
-            col_pulse.setSpacing(0)
-            col_pulse.addWidget(self._unit("HEART RATE"))
-            val_pulse = QHBoxLayout()
-            val_pulse.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
+            value = self._value_label("--/--", value_object_name)
             pulse_label = self._value_label("--", "ValuePulse")
-            val_pulse.addWidget(pulse_label)
-            val_pulse.addWidget(self._unit("bpm"))
-            val_pulse.addStretch()
-            col_pulse.addLayout(val_pulse)
-            row_val.addLayout(col_pulse, 1)
+            layout.addWidget(self._bp_value_area(value, pulse_label, unit), 1)
         else:
-            row_val.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
             value = self._value_label("--", value_object_name)
-            row_val.addWidget(value)
-            row_val.addWidget(self._unit(unit))
-            row_val.addStretch()
             pulse_label = None
+            layout.addWidget(self._single_value_area(value, unit), 1)
 
-        layout.addLayout(row_val)
-        layout.addStretch()
         
         badge = QLabel("ยังไม่มีข้อมูล")
         badge.setObjectName("StatusBadge")
@@ -755,9 +696,9 @@ class CareKeeperWindow(QMainWindow):
         label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         return label
 
-    def _unit(self, text: str) -> QLabel:
+    def _unit(self, text: str, object_name: str = "CardUnit") -> QLabel:
         label = QLabel(text)
-        label.setObjectName("CardUnit")
+        label.setObjectName(object_name)
         # จัดให้อยู่ชิดฐานล่าง เพื่อให้พอดีกับตัวเลขใหญ่ๆ
         label.setAlignment(Qt.AlignLeft | Qt.AlignBottom) 
         return label
@@ -767,6 +708,62 @@ class CareKeeperWindow(QMainWindow):
         label.setObjectName(object_name)
         label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         return label
+
+    def _metric_label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("CardMetricLabel")
+        label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        return label
+
+    def _value_with_unit(self, value_label: QLabel, unit: str, unit_object_name: str) -> QWidget:
+        wrapper = QWidget()
+        row = QHBoxLayout(wrapper)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        row.addWidget(value_label)
+        row.addWidget(self._unit(unit, unit_object_name))
+        row.addStretch(1)
+        return wrapper
+
+    def _bp_value_area(self, bp_value: QLabel, pulse_value: QLabel, bp_unit: str) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("CardValueArea")
+        frame.setMinimumHeight(102)
+
+        row = QHBoxLayout(frame)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(18)
+        row.setAlignment(Qt.AlignVCenter)
+
+        bp_col = QVBoxLayout()
+        bp_col.setSpacing(4)
+        bp_col.addWidget(self._metric_label("SYS / DIA"))
+        bp_col.addWidget(self._value_with_unit(bp_value, bp_unit, "CardUnitInline"))
+
+        pulse_col = QVBoxLayout()
+        pulse_col.setSpacing(4)
+        pulse_col.addWidget(self._metric_label("HEART RATE"))
+        pulse_col.addWidget(self._value_with_unit(pulse_value, "/min", "CardUnitInline"))
+
+        row.addLayout(bp_col, 5)
+        row.addLayout(pulse_col, 3)
+        return frame
+
+    def _single_value_area(self, value_label: QLabel, unit: str) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("CardValueArea")
+        frame.setMinimumHeight(104)
+
+        row = QHBoxLayout(frame)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        row.setAlignment(Qt.AlignCenter)
+        row.addStretch(1)
+        row.addWidget(value_label)
+        row.addWidget(self._unit(unit, "CardUnitLarge"))
+        row.addStretch(1)
+        return frame
 
     def _measure_button(self, text: str, obj_name: str = "BtnMeasureBase") -> QPushButton:
         button = QPushButton(text)
@@ -880,11 +877,27 @@ class CareKeeperWindow(QMainWindow):
     def _card_header(self, icon: str, bg_color: str, fg_color: str, title_th: str, title_en: str) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
-        lbl_icon = QLabel(icon)
+
+        icon_name_by_card = {
+            "BLOOD PRESSURE & PULSE": ICON_BLOOD_PRESSURE,
+            "SPO2": ICON_SPO2,
+            "TEMPERATURE": ICON_TEMPERATURE,
+        }
+        icon_name = icon if icon.lower().endswith((".svg", ".png", ".jpg", ".jpeg")) else icon_name_by_card.get(title_en)
+        icon_path = _style_asset(icon_name) if icon_name else None
+
+        lbl_icon = QLabel()
         lbl_icon.setAlignment(Qt.AlignCenter)
         lbl_icon.setFixedSize(48, 48)
-        lbl_icon.setStyleSheet(f"background-color: {bg_color}; color: {fg_color}; border-radius: 24px; font-size: 24px;")
+        lbl_icon.setStyleSheet(f"background-color: {bg_color}; color: {fg_color}; border-radius: 24px;")
+        if icon_path and icon_path.exists():
+            pixmap = QPixmap(str(icon_path))
+            if not pixmap.isNull():
+                lbl_icon.setPixmap(pixmap.scaled(30, 30, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            else:
+                lbl_icon.setText(icon)
+        else:
+            lbl_icon.setText(icon)
         
         col_text = QVBoxLayout()
         col_text.setSpacing(0)
@@ -1113,9 +1126,9 @@ class CareKeeperWindow(QMainWindow):
             address.setText(self.patient.address)
 
     def _refresh_values(self) -> None:
-        bp_text = "-- / --"
+        bp_text = "--/--"
         if self.vitals.systolic is not None and self.vitals.diastolic is not None:
-            bp_text = f"{self.vitals.systolic} / {self.vitals.diastolic}"
+            bp_text = f"{self.vitals.systolic}/{self.vitals.diastolic}"
 
         pulse_text = self._format_int(self.vitals.pulse)
         spo2_text = self._format_int(self.vitals.spo2)
@@ -1242,12 +1255,16 @@ class CareKeeperWindow(QMainWindow):
             QLabel#CardTitleTH { font-size: 19px; font-weight: 900; color: #0b1f33; }
             QLabel#CardTitleEN { font-size: 13px; font-weight: 800; color: #64748b; letter-spacing: 1px; }
             QLabel#CardUnit { font-size: 18px; font-weight: 800; color: #64748b; padding-bottom: 6px; padding-left: 4px; }
+            QFrame#CardValueArea { background: transparent; border: none; }
+            QLabel#CardMetricLabel { font-size: 16px; font-weight: 900; color: #334155; letter-spacing: 0.8px; }
+            QLabel#CardUnitInline { font-size: 18px; font-weight: 900; color: #334155; padding-bottom: 9px; padding-left: 2px; }
+            QLabel#CardUnitLarge { font-size: 26px; font-weight: 900; color: #334155; padding-bottom: 16px; padding-left: 4px; }
             
             /* สีของค่าที่วัดได้เป็นสีเดิมตามที่ตกลงกันไว้ครับ */
-            QLabel#ValueBP { font-size: 46px; font-weight: 900; color: #1d4ed8; letter-spacing: -1px; }
-            QLabel#ValuePulse { font-size: 46px; font-weight: 900; color: #1d4ed8; letter-spacing: -1px; }
-            QLabel#ValueSpO2 { font-size: 52px; font-weight: 900; color: #1d4ed8; letter-spacing: -1.2px; }
-            QLabel#ValueTemp { font-size: 52px; font-weight: 900; color: #1d4ed8; letter-spacing: -1.2px; }
+            QLabel#ValueBP { font-size: 52px; font-weight: 900; color: #1d4ed8; letter-spacing: -1px; }
+            QLabel#ValuePulse { font-size: 52px; font-weight: 900; color: #1d4ed8; letter-spacing: -1px; }
+            QLabel#ValueSpO2 { font-size: 74px; font-weight: 900; color: #1d4ed8; letter-spacing: -1.2px; }
+            QLabel#ValueTemp { font-size: 74px; font-weight: 900; color: #1d4ed8; letter-spacing: -1.2px; }
             
             QLabel#SummaryHint { font-size: 17px; font-weight: 800; color: #007982; }
 
