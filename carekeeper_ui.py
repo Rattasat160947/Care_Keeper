@@ -39,7 +39,7 @@ APP_FONT_FAMILY = "Noto Sans Thai"
 
 
 def _load_app_font(app: QApplication) -> str:
-    font_path = Path(__file__).resolve().parent / "NotoSansThai-Regular.ttf"
+    font_path = Path(__file__).resolve().parent / "IBMPlexSansThai-Regular.ttf"
     family = APP_FONT_FAMILY
 
     if font_path.exists():
@@ -379,13 +379,38 @@ class CareKeeperWindow(QMainWindow):
         outer.setContentsMargins(20, 20, 20, 20)
         outer.setSpacing(0)
 
+        # --- ส่วนที่ดึงไอคอนสถานะมาไว้หน้าแรก ---
         top_row = QHBoxLayout()
+        status_bg = QFrame()
+        status_bg.setObjectName("Header") 
+        self._add_soft_shadow(status_bg)
+        status_layout = QHBoxLayout(status_bg)
+        status_layout.setContentsMargins(16, 8, 16, 8)
+        
+        self.bt_ind_welcome = BluetoothIndicator()
+        self.wifi_ind_welcome = WifiIndicator()
+        self.bat_ind_welcome = BatteryIndicator()
+        self.lbl_bat_welcome = QLabel("0%")
+        self.lbl_bat_welcome.setObjectName("BatteryLabel")
+        
+        self.wifi_ind_welcome.clicked.connect(self._open_wifi_selector)
+        self.bt_ind_welcome.clicked.connect(self._open_bluetooth_selector)
+        
+        status_layout.addWidget(self.bt_ind_welcome)
+        status_layout.addSpacing(4)
+        status_layout.addWidget(self.wifi_ind_welcome)
+        status_layout.addSpacing(12)
+        status_layout.addWidget(self.lbl_bat_welcome)
+        status_layout.addWidget(self.bat_ind_welcome)
+        
+        top_row.addWidget(status_bg)
         top_row.addStretch()
         self.btn_power = PowerButton()
         self.btn_power.clicked.connect(self._open_power_menu)
         self._add_soft_shadow(self.btn_power)
         top_row.addWidget(self.btn_power)
         outer.addLayout(top_row)
+        # -----------------------------------
 
         outer.addStretch(1)
 
@@ -393,8 +418,8 @@ class CareKeeperWindow(QMainWindow):
         center_row.addStretch(1)
 
         card, layout = self._make_card("WelcomeCard")
-        card.setFixedSize(700, 470)
-        layout.setContentsMargins(70, 60, 70, 60)
+        card.setFixedSize(700, 420)
+        layout.setContentsMargins(70, 40, 70, 40)
         layout.setAlignment(Qt.AlignCenter)
 
         logo = QLabel("CareKeeper")
@@ -405,7 +430,7 @@ class CareKeeperWindow(QMainWindow):
         title.setObjectName("WelcomeTitle")
         title.setAlignment(Qt.AlignCenter)
 
-        subtitle = QLabel("ระบบจะอ่านข้อมูลผู้รับบริการเพื่อยืนยันตัวตนก่อนตรวจร่างกาย")
+        subtitle = QLabel("เพื่อยืนยันตัวตนก่อนตรวจร่างกาย")
         subtitle.setObjectName("WelcomeSub")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(True)
@@ -426,59 +451,72 @@ class CareKeeperWindow(QMainWindow):
         center_row.addWidget(card)
         center_row.addStretch(1)
         outer.addLayout(center_row)
-
         outer.addStretch(1)
-
         self.stack.addWidget(root)
 
     def _build_dashboard_page(self) -> None:
         root = QWidget()
         root.setObjectName("RootBg")
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
 
         layout.addWidget(self._build_patient_header(summary=False))
 
         grid = QGridLayout()
         grid.setSpacing(16)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(2, 1)
+        grid.setColumnStretch(0, 10) # กล่องความดันกว้างสุด
+        grid.setColumnStretch(1, 7)
+        grid.setColumnStretch(2, 7)
 
-        # --- กล่องความดันโลหิต ---
+        # --- กล่องความดันโลหิต (มีเส้นคั่นกลาง) ---
         bp_card, bp = self._make_card()
-        bp.setSpacing(8)
-        bp.addWidget(self._tag("ความดันโลหิต (BLOOD PRESSURE)"))
+        bp.setSpacing(4)
+        bp.addLayout(self._card_header("❤", "#fee2e2", "#dc2626", "ความดันโลหิต & ชีพจร", "BLOOD PRESSURE & PULSE"))
+        bp.addSpacing(12)
         
         row_bp = QHBoxLayout()
-        row_bp.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
+        col_sys = QVBoxLayout()
+        col_sys.setSpacing(0)
+        val_sys = QHBoxLayout()
+        val_sys.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
         self.lbl_bp_value = self._value_label("-- / --", "ValueBP")
-        row_bp.addWidget(self.lbl_bp_value)
-        row_bp.addWidget(self._unit("mmHg"))
-        row_bp.addStretch()
-        bp.addLayout(row_bp)
+        val_sys.addWidget(self.lbl_bp_value)
+        val_sys.addWidget(self._unit("mmHg"))
+        val_sys.addStretch()
+        col_sys.addLayout(val_sys)
+        col_sys.addWidget(self._unit("SYS / DIA"))
+        row_bp.addLayout(col_sys, 2)
         
-        bp.addStretch(1)
-        bp.addWidget(self._tag("ชีพจร (PULSE)"))
+        line = QFrame()
+        line.setFrameShape(QFrame.VLine)
+        line.setStyleSheet("border-left: 2px solid #e2e8f0;")
+        row_bp.addWidget(line)
+        row_bp.addSpacing(16)
         
-        row_pulse = QHBoxLayout()
-        row_pulse.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
+        col_pulse = QVBoxLayout()
+        col_pulse.setSpacing(0)
+        col_pulse.addWidget(self._unit("HEART RATE"))
+        val_pulse = QHBoxLayout()
+        val_pulse.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
         self.lbl_pulse_value = self._value_label("--", "ValuePulse")
-        row_pulse.addWidget(self.lbl_pulse_value)
-        row_pulse.addWidget(self._unit("bpm"))
-        row_pulse.addStretch()
-        bp.addLayout(row_pulse)
+        val_pulse.addWidget(self.lbl_pulse_value)
+        val_pulse.addWidget(self._unit("bpm"))
+        val_pulse.addStretch()
+        col_pulse.addLayout(val_pulse)
+        row_bp.addLayout(col_pulse, 1)
         
-        bp.addStretch(2)
-        self.btn_bp = self._measure_button("วัดความดัน")
+        bp.addLayout(row_bp)
+        bp.addStretch(1)
+        self.btn_bp = self._measure_button("วัดความดัน (MEASURE)", "BtnBP")
         self.btn_bp.clicked.connect(self._measure_bp)
         bp.addWidget(self.btn_bp)
 
         # --- กล่องออกซิเจน ---
         spo2_card, spo2 = self._make_card()
-        spo2.setSpacing(8)
-        spo2.addWidget(self._tag("ออกซิเจนในเลือด (SpO2)"))
+        spo2.setSpacing(4)
+        spo2.addLayout(self._card_header("💨", "#e0f2fe", "#0284c7", "ออกซิเจนในเลือด", "SPO2"))
+        spo2.addSpacing(12)
         
         row_spo2 = QHBoxLayout()
         row_spo2.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
@@ -489,14 +527,15 @@ class CareKeeperWindow(QMainWindow):
         spo2.addLayout(row_spo2)
         
         spo2.addStretch()
-        self.btn_spo2 = self._measure_button("วัดออกซิเจน")
+        self.btn_spo2 = self._measure_button("วัดออกซิเจน (MEASURE)", "BtnSpO2")
         self.btn_spo2.clicked.connect(self._measure_spo2)
         spo2.addWidget(self.btn_spo2)
 
         # --- กล่องอุณหภูมิ ---
         temp_card, temp = self._make_card()
-        temp.setSpacing(8)
-        temp.addWidget(self._tag("อุณหภูมิร่างกาย (TEMPERATURE)"))
+        temp.setSpacing(4)
+        temp.addLayout(self._card_header("🌡", "#dcfce7", "#16a34a", "อุณหภูมิร่างกาย", "TEMPERATURE"))
+        temp.addSpacing(12)
         
         row_temp = QHBoxLayout()
         row_temp.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
@@ -507,7 +546,7 @@ class CareKeeperWindow(QMainWindow):
         temp.addLayout(row_temp)
         
         temp.addStretch()
-        self.btn_temp = self._measure_button("วัดอุณหภูมิ")
+        self.btn_temp = self._measure_button("วัดอุณหภูมิ (MEASURE)", "BtnTemp")
         self.btn_temp.clicked.connect(self._measure_temperature)
         temp.addWidget(self.btn_temp)
 
@@ -515,48 +554,59 @@ class CareKeeperWindow(QMainWindow):
         grid.addWidget(spo2_card, 0, 1)
         grid.addWidget(temp_card, 0, 2)
         layout.addLayout(grid, 1)
-        layout.addSpacing(4)
 
-        self.btn_summary = QPushButton("วัดค่าอย่างน้อย 1 รายการก่อน")
+        # แถบควบคุมด้านล่าง (ตีกรอบขาวเหมือนในรูป)
+        bottom_frame = QFrame()
+        bottom_frame.setObjectName("Header")
+        self._add_soft_shadow(bottom_frame)
+        bottom_layout = QHBoxLayout(bottom_frame)
+        bottom_layout.setContentsMargins(24, 12, 24, 12)
+        
+        self.lbl_summary_hint = QLabel("วัดค่าอย่างน้อย 1 รายการก่อน (MEASURE AT LEAST 1 ITEM BEFORE PROCEEDING)")
+        self.lbl_summary_hint.setObjectName("SummaryHint")
+        bottom_layout.addWidget(self.lbl_summary_hint)
+        bottom_layout.addStretch()
+        
+        self.btn_summary = QPushButton("ถัดไป (NEXT) >")
         self.btn_summary.setObjectName("BtnSummaryDisabled")
-        self.btn_summary.setFixedHeight(48)
+        self.btn_summary.setFixedSize(220, 52)
         self.btn_summary.setEnabled(False)
         self.btn_summary.clicked.connect(self._show_summary)
-        layout.addWidget(self.btn_summary)
-
+        bottom_layout.addWidget(self.btn_summary)
+        
+        layout.addWidget(bottom_frame)
         self.stack.addWidget(root)
 
     def _build_summary_page(self) -> None:
         root = QWidget()
         root.setObjectName("RootBg")
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
 
         layout.addWidget(self._build_patient_header(summary=True))
 
-        title = QLabel("สรุปผลการวัด")
+        title = QLabel("สรุปผลการวัด (SUMMARY)")
         title.setObjectName("SumTitle")
         layout.addWidget(title)
 
         grid = QGridLayout()
         grid.setSpacing(16)
+        grid.setColumnStretch(0, 10)
+        grid.setColumnStretch(1, 7)
+        grid.setColumnStretch(2, 7)
 
         bp_card, self.sum_bp_value, self.sum_pulse_value, self.sum_bp_badge = self._summary_card(
-            "ความดันโลหิต (BLOOD PRESSURE)",
-            "mmHg",
-            "ValueBP",
-            has_pulse=True,
+            "❤", "#fee2e2", "#dc2626", "ความดันโลหิต & ชีพจร", "BLOOD PRESSURE & PULSE",
+            "mmHg", "ValueBP", has_pulse=True,
         )
         spo2_card, self.sum_spo2_value, _, self.sum_spo2_badge = self._summary_card(
-            "ออกซิเจนในเลือด (SpO2)",
-            "%",
-            "ValueSpO2",
+            "💨", "#e0f2fe", "#0284c7", "ออกซิเจนในเลือด", "SPO2",
+            "%", "ValueSpO2",
         )
         temp_card, self.sum_temp_value, _, self.sum_temp_badge = self._summary_card(
-            "อุณหภูมิร่างกาย (TEMPERATURE)",
-            "°C",
-            "ValueTemp",
+            "🌡", "#dcfce7", "#16a34a", "อุณหภูมิร่างกาย", "TEMPERATURE",
+            "°C", "ValueTemp",
         )
 
         grid.addWidget(bp_card, 0, 0)
@@ -566,39 +616,50 @@ class CareKeeperWindow(QMainWindow):
 
         self.btn_finish = QPushButton("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
         self.btn_finish.setObjectName("BtnFinish")
-        self.btn_finish.setFixedHeight(44)
-        self.btn_finish.clicked.connect(self._submit_data) #เรียกใช้ฟังก์ชันส่งข้อมูลไปยังเซิร์ฟเวอร์เมื่อคลิก
-        layout.addSpacing(4)
+        self.btn_finish.setFixedHeight(52)
+        self.btn_finish.clicked.connect(self._submit_data)
         layout.addWidget(self.btn_finish)
 
         self.stack.addWidget(root)
 
     def _build_patient_header(self, summary: bool) -> QFrame:
         header = QFrame()
-        header.setObjectName("Header")
-        self._add_soft_shadow(header)
+        header.setObjectName("HeaderFlat")
 
-        row = QHBoxLayout(header)
-        row.setContentsMargins(20, 14, 20, 14)
-        row.setSpacing(12)
-
-        patient_col = QVBoxLayout()
-        patient_col.setSpacing(3)
-
-        lbl_name = QLabel("ผู้รับบริการ: -")
-        lbl_cid = QLabel("เลขบัตร: -")
-        lbl_dob = QLabel("วันเกิด: -")
-        lbl_address = QLabel("ที่อยู่: -")
-        lbl_name.setObjectName("HeaderName")
-        lbl_cid.setObjectName("HeaderSub")
-        lbl_dob.setObjectName("HeaderSub")
-        lbl_address.setObjectName("HeaderAddress")
-
-        for label in (lbl_name, lbl_cid, lbl_dob, lbl_address):
-            label.setWordWrap(True)
-            patient_col.addWidget(label)
-
-        row.addLayout(patient_col, 1)
+        layout = QHBoxLayout(header)
+        layout.setContentsMargins(8, 0, 8, 16) # เว้นระยะด้านล่างให้เส้นคั่น
+        
+        info_col = QVBoxLayout()
+        info_col.setSpacing(6)
+        
+        # แถวที่ 1: ชื่อ-สกุล + รหัสบัตรประชาชน
+        row1 = QHBoxLayout()
+        row1.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        lbl_name = QLabel("-")
+        lbl_cid = QLabel("-")
+        lbl_name.setObjectName("HeaderNameNew")
+        lbl_cid.setObjectName("HeaderCidNew")
+        row1.addWidget(lbl_name)
+        row1.addSpacing(16)
+        row1.addWidget(lbl_cid)
+        row1.addStretch()
+        
+        # แถวที่ 2: วันเกิด + ที่อยู่
+        row2 = QHBoxLayout()
+        row2.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        lbl_dob = QLabel("เกิด: -")
+        lbl_address = QLabel("-")
+        lbl_dob.setObjectName("HeaderSubNew")
+        lbl_address.setObjectName("HeaderSubNew")
+        row2.addWidget(lbl_dob)
+        row2.addSpacing(24)
+        row2.addWidget(lbl_address)
+        row2.addStretch()
+        
+        info_col.addLayout(row1)
+        info_col.addLayout(row2)
+        
+        layout.addLayout(info_col, 1)
 
         if summary:
             self.sum_lbl_name = lbl_name
@@ -606,11 +667,12 @@ class CareKeeperWindow(QMainWindow):
             self.sum_lbl_dob = lbl_dob
             self.sum_lbl_address = lbl_address
 
-            btn_back = QPushButton("วัดซ้ำ")
+            # ปุ่มสำหรับหน้าสรุปผล
+            btn_back = QPushButton("วัดซ้ำ (RE-MEASURE)")
             btn_back.setObjectName("BtnSecondary")
-            btn_back.setFixedSize(100, 36)
+            btn_back.setFixedSize(220, 48)
             btn_back.clicked.connect(lambda: self.stack.setCurrentIndex(1))
-            row.addWidget(btn_back, alignment=Qt.AlignRight | Qt.AlignTop)
+            layout.addWidget(btn_back, alignment=Qt.AlignRight | Qt.AlignVCenter)
             return header
 
         self.lbl_name = lbl_name
@@ -618,63 +680,72 @@ class CareKeeperWindow(QMainWindow):
         self.lbl_dob = lbl_dob
         self.lbl_address = lbl_address
 
-        status_row = QHBoxLayout()
-        status_row.setSpacing(8)
-        status_row.setAlignment(Qt.AlignVCenter)
-
-        self.bluetooth_indicator = BluetoothIndicator()
-        self.wifi_indicator = WifiIndicator()
-        self.wifi_indicator.clicked.connect(self._open_wifi_selector)
-        self.bluetooth_indicator.clicked.connect(self._open_bluetooth_selector)
-        self.battery_indicator = BatteryIndicator()
-        self.lbl_battery_text = QLabel("0%")
-        self.lbl_battery_text.setObjectName("BatteryLabel")
-
-        status_row.addWidget(self.bluetooth_indicator)
-        status_row.addWidget(self.wifi_indicator)
-        status_row.addSpacing(4)
-        status_row.addWidget(self.lbl_battery_text)
-        status_row.addWidget(self.battery_indicator)
-        row.addLayout(status_row)
         return header
 
     def _summary_card(
         self,
-        title: str,
+        icon: str,
+        icon_bg: str,
+        icon_color: str,
+        title_th: str,
+        title_en: str,
         unit: str,
         value_object_name: str,
         has_pulse: bool = False,
     ) -> tuple[QFrame, QLabel, QLabel | None, QLabel]:
         card, layout = self._make_card()
-        layout.addWidget(self._tag(title))
+        layout.setSpacing(4)
+        layout.addLayout(self._card_header(icon, icon_bg, icon_color, title_th, title_en))
+        layout.addSpacing(12)
         
         row_val = QHBoxLayout()
-        row_val.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
-        value = self._value_label("--", value_object_name)
-        row_val.addWidget(value)
-        row_val.addWidget(self._unit(unit))
-        row_val.addStretch()
-        layout.addLayout(row_val)
-
-        pulse_label = None
         if has_pulse:
-            layout.addSpacing(22)
-            layout.addWidget(self._tag("ชีพจร (PULSE)"))
+            col_sys = QVBoxLayout()
+            col_sys.setSpacing(0)
+            val_sys = QHBoxLayout()
+            val_sys.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
+            value = self._value_label("-- / --", value_object_name)
+            val_sys.addWidget(value)
+            val_sys.addWidget(self._unit(unit))
+            val_sys.addStretch()
+            col_sys.addLayout(val_sys)
+            col_sys.addWidget(self._unit("SYS / DIA"))
+            row_val.addLayout(col_sys, 2)
             
-            row_pulse = QHBoxLayout()
-            row_pulse.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+            line = QFrame()
+            line.setFrameShape(QFrame.VLine)
+            line.setStyleSheet("border-left: 2px solid #e2e8f0;")
+            row_val.addWidget(line)
+            row_val.addSpacing(16)
+            
+            col_pulse = QVBoxLayout()
+            col_pulse.setSpacing(0)
+            col_pulse.addWidget(self._unit("HEART RATE"))
+            val_pulse = QHBoxLayout()
+            val_pulse.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
             pulse_label = self._value_label("--", "ValuePulse")
-            row_pulse.addWidget(pulse_label)
-            row_pulse.addWidget(self._unit("bpm"))
-            row_pulse.addStretch()
-            layout.addLayout(row_pulse)
+            val_pulse.addWidget(pulse_label)
+            val_pulse.addWidget(self._unit("bpm"))
+            val_pulse.addStretch()
+            col_pulse.addLayout(val_pulse)
+            row_val.addLayout(col_pulse, 1)
+        else:
+            row_val.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+            value = self._value_label("--", value_object_name)
+            row_val.addWidget(value)
+            row_val.addWidget(self._unit(unit))
+            row_val.addStretch()
+            pulse_label = None
 
+        layout.addLayout(row_val)
         layout.addStretch()
+        
         badge = QLabel("ยังไม่มีข้อมูล")
         badge.setObjectName("StatusBadge")
         badge.setAlignment(Qt.AlignCenter)
         badge.setFixedHeight(34)
         layout.addWidget(badge)
+        
         return card, value, pulse_label, badge
 
     def _tag(self, text: str) -> QLabel:
@@ -697,10 +768,10 @@ class CareKeeperWindow(QMainWindow):
         label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         return label
 
-    def _measure_button(self, text: str) -> QPushButton:
+    def _measure_button(self, text: str, obj_name: str = "BtnMeasureBase") -> QPushButton:
         button = QPushButton(text)
-        button.setObjectName("BtnMeasureBase")
-        button.setFixedHeight(36)
+        button.setObjectName(obj_name)
+        button.setFixedHeight(52)
         return button
 
     def _start_task(
@@ -805,6 +876,46 @@ class CareKeeperWindow(QMainWindow):
         task.failed.connect(lambda message: None)
         task.finished.connect(lambda: self._release_task(task))
         task.start()
+
+    def _card_header(self, icon: str, bg_color: str, fg_color: str, title_th: str, title_en: str) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        
+        lbl_icon = QLabel(icon)
+        lbl_icon.setAlignment(Qt.AlignCenter)
+        lbl_icon.setFixedSize(48, 48)
+        lbl_icon.setStyleSheet(f"background-color: {bg_color}; color: {fg_color}; border-radius: 24px; font-size: 24px;")
+        
+        col_text = QVBoxLayout()
+        col_text.setSpacing(0)
+        lbl_th = QLabel(title_th)
+        lbl_th.setObjectName("CardTitleTH")
+        lbl_en = QLabel(title_en)
+        lbl_en.setObjectName("CardTitleEN")
+        col_text.addWidget(lbl_th)
+        col_text.addWidget(lbl_en)
+        
+        row.addWidget(lbl_icon)
+        row.addSpacing(12)
+        row.addLayout(col_text)
+        row.addStretch()
+        return row
+
+    def _on_status_done(self, result: object) -> None:
+        if not isinstance(result, DeviceStatus):
+            return
+        # อัปเดตหน้า Dashboard
+        self.lbl_battery_text.setText(f"{result.battery_percent}%")
+        self.battery_indicator.set_percent(result.battery_percent)
+        self.wifi_indicator.set_connected(result.wifi_connected)
+        self.bluetooth_indicator.set_connected(result.bluetooth_connected)
+        
+        # อัปเดตหน้า Scan Page แรกสุดด้วย
+        if hasattr(self, 'lbl_bat_welcome'):
+            self.lbl_bat_welcome.setText(f"{result.battery_percent}%")
+            self.bat_ind_welcome.set_percent(result.battery_percent)
+            self.wifi_ind_welcome.set_connected(result.wifi_connected)
+            self.bt_ind_welcome.set_connected(result.bluetooth_connected)
 
     def _on_status_done(self, result: object) -> None:
         if not isinstance(result, DeviceStatus):
@@ -996,10 +1107,10 @@ class CareKeeperWindow(QMainWindow):
             (self.lbl_name, self.lbl_cid, self.lbl_dob, self.lbl_address),
             (self.sum_lbl_name, self.sum_lbl_cid, self.sum_lbl_dob, self.sum_lbl_address),
         ):
-            name.setText(f"ผู้รับบริการ: {display_name}")
-            cid.setText(f"เลขบัตร: {self.patient.cid}")
-            dob.setText(f"วันเกิด: {self.patient.birth_date}")
-            address.setText(f"ที่อยู่: {self.patient.address}")
+            name.setText(display_name)
+            cid.setText(self.patient.cid)
+            dob.setText(f"เกิด: {self.patient.birth_date}")
+            address.setText(self.patient.address)
 
     def _refresh_values(self) -> None:
         bp_text = "-- / --"
@@ -1100,168 +1211,80 @@ class CareKeeperWindow(QMainWindow):
         self.setStyleSheet(
             """
             * { font-family: "__APP_FONT__", "Noto Sans Thai", sans-serif; font-size: 19px; color: #0b1f33; }
-            QWidget#RootBg { background-color: #e9f1f7; }
+            QWidget#RootBg { background-color: #f8fafc; }
 
             QFrame#WelcomeCard {
                 background: #ffffff;
                 border-radius: 24px;
-                border: 3px solid #0f8b8d;
+                border: 2px solid #e2e8f0;
             }
-            QLabel#WelcomeLogo {
-                font-size: 38px;
-                font-weight: 900;
-                color: #0f8b8d;
-                letter-spacing: 0.8px;
-            }
-            QLabel#WelcomeTitle {
-                font-size: 36px;
-                font-weight: 800;
-                color: #0b1f33;
-            }
-            QLabel#WelcomeSub {
-                font-size: 24px;
-                font-weight: 600;
-                color: #1e293b;
-            }
+            QLabel#WelcomeLogo { font-size: 38px; font-weight: 900; color: #0056b3; }
+            QLabel#WelcomeTitle { font-size: 36px; font-weight: 800; color: #0b1f33; }
+            QLabel#WelcomeSub { font-size: 24px; font-weight: 600; color: #475569; }
 
             QFrame#Header {
                 background: #ffffff;
                 border-radius: 16px;
-                border: 2px solid #9ec9d6;
+                border: 2px solid #e2e8f0;
             }
-            QLabel#HeaderName {
-                font-size: 20px;
-                font-weight: 900;
-                color: #0b1f33;
-            }
-            QLabel#HeaderSub {
-                font-size: 16px;
-                font-weight: 700;
-                color: #1e293b;
-            }
-            QLabel#HeaderAddress {
-                font-size: 15px;
-                font-weight: 600;
-                color: #334155;
-            }
-            QLabel#BatteryLabel {
-                font-size: 20px;
-                font-weight: 900;
-                color: #0b1f33;
-            }
-            QLabel#SumTitle {
-                font-size: 20px;
-                font-weight: 800;
-                color: #0b1f33;
-                padding-left: 2px;
-            }
+            QLabel#HeaderName { font-size: 20px; font-weight: 900; color: #0b1f33; }
+            QLabel#HeaderSub { font-size: 16px; font-weight: 700; color: #475569; }
+            QLabel#HeaderAddress { font-size: 15px; font-weight: 600; color: #64748b; }
+            QLabel#BatteryLabel { font-size: 20px; font-weight: 900; color: #0b1f33; }
+            QLabel#SumTitle { font-size: 20px; font-weight: 800; color: #0b1f33; padding-left: 2px; }
 
             QFrame#Card {
                 background: #ffffff;
                 border-radius: 20px;
-                border: 2px solid #9ec9d6;
+                border: 2px solid #e2e8f0;
                 min-height: 245px;
             }
-            QLabel#CardTag {
-                font-size: 18px;
-                font-weight: 900;
-                letter-spacing: 0.5px;
-                color: #0b1f33;
-            }
-            QLabel#CardUnit {
-                font-size: 20px;
-                font-weight: 800;
-                color: #334155;
-                padding-bottom: 8px; /* ดันให้ฐานตัวอักษรเสมอกับตัวเลขใหญ่ๆ */
-                padding-left: 4px;
-            }
-            QLabel#ValueBP {
-                font-size: 46px;
-                font-weight: 900;
-                color: #1d4ed8;
-                letter-spacing: -1.2px;
-            }
-            QLabel#ValuePulse {
-                font-size: 46px;
-                font-weight: 900;
-                color: #1d4ed8;
-                letter-spacing: -0.6px;
-            }
-            QLabel#ValueSpO2 {
-                font-size: 52px;
-                font-weight: 900;
-                color: #1d4ed8;
-                letter-spacing: -1.2px;
-            }
-            QLabel#ValueTemp {
-                font-size: 52px;
-                font-weight: 900;
-                color: #1d4ed8;
-                letter-spacing: -1.2px;
-            }
+            QLabel#CardTitleTH { font-size: 19px; font-weight: 900; color: #0b1f33; }
+            QLabel#CardTitleEN { font-size: 13px; font-weight: 800; color: #64748b; letter-spacing: 1px; }
+            QLabel#CardUnit { font-size: 18px; font-weight: 800; color: #64748b; padding-bottom: 6px; padding-left: 4px; }
+            
+            /* สีของค่าที่วัดได้เป็นสีเดิมตามที่ตกลงกันไว้ครับ */
+            QLabel#ValueBP { font-size: 46px; font-weight: 900; color: #1d4ed8; letter-spacing: -1px; }
+            QLabel#ValuePulse { font-size: 46px; font-weight: 900; color: #1d4ed8; letter-spacing: -1px; }
+            QLabel#ValueSpO2 { font-size: 52px; font-weight: 900; color: #1d4ed8; letter-spacing: -1.2px; }
+            QLabel#ValueTemp { font-size: 52px; font-weight: 900; color: #1d4ed8; letter-spacing: -1.2px; }
+            
+            QLabel#SummaryHint { font-size: 17px; font-weight: 800; color: #007982; }
 
-            QPushButton#BtnWelcomeAction {
-                background-color: #0f8b8d;
-                color: #ffffff;
-                border: none;
-                border-radius: 14px;
-                font-size: 24px;
-                font-weight: 900;
-            }
-            QPushButton#BtnWelcomeAction:hover { background-color: #0b7476; }
+            QPushButton#BtnWelcomeAction { background-color: #0056b3; color: white; border-radius: 14px; font-size: 24px; font-weight: 900; }
+            QPushButton#BtnWelcomeAction:hover { background-color: #004494; }
 
-            QPushButton#BtnMeasureBase {
-                background-color: #e3f9f1;
-                color: #03543f;
-                border: 3px solid #0ea672;
-                border-radius: 10px;
-                font-size: 19px;
-                font-weight: 900;
-            }
-            QPushButton#BtnMeasureBase:hover { background-color: #bbf7d0; }
-            QPushButton#BtnMeasureBase:disabled {
-                background-color: #eef2f6;
-                color: #64748b;
-                border-color: #b6c4d0;
-            }
+            /* แยกสีปุ่มตามดีไซน์ใหม่ */
+            QPushButton#BtnBP { background-color: #0056b3; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 900; }
+            QPushButton#BtnBP:hover { background-color: #004494; }
+            QPushButton#BtnBP:disabled { background-color: #eef2f6; color: #64748b; }
+            
+            QPushButton#BtnSpO2 { background-color: #007982; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 900; }
+            QPushButton#BtnSpO2:hover { background-color: #006067; }
+            QPushButton#BtnSpO2:disabled { background-color: #eef2f6; color: #64748b; }
+            
+            QPushButton#BtnTemp { background-color: #007a33; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 900; }
+            QPushButton#BtnTemp:hover { background-color: #005f27; }
+            QPushButton#BtnTemp:disabled { background-color: #eef2f6; color: #64748b; }
 
-            QPushButton#BtnSummaryDisabled {
-                background-color: #c3d3dd;
-                color: #41596b;
-                border: none;
-                border-radius: 14px;
-                font-size: 18px;
-                font-weight: 800;
-            }
-            QPushButton#BtnSummaryReady {
-                background-color: #1d4ed8;
-                color: #ffffff;
-                border: none;
-                border-radius: 14px;
-                font-size: 18px;
-                font-weight: 900;
-            }
-            QPushButton#BtnSummaryReady:hover { background-color: #1741b8; }
+            QPushButton#BtnSummaryDisabled { background-color: #e2e8f0; color: #64748b; border-radius: 14px; font-size: 18px; font-weight: 800; }
+            QPushButton#BtnSummaryReady { background-color: #0056b3; color: #ffffff; border-radius: 14px; font-size: 18px; font-weight: 900; }
+            QPushButton#BtnSummaryReady:hover { background-color: #004494; }
 
-            QPushButton#BtnSecondary {
-                background-color: #ffffff;
-                color: #03543f;
-                border: 3px solid #0ea672;
-                border-radius: 10px;
-                font-size: 18px;
-                font-weight: 900;
-            }
-            QPushButton#BtnSecondary:hover { background-color: #e3f9f1; }
+            QPushButton#BtnSecondary { background-color: #ffffff; color: #0056b3; border: 2px solid #0056b3; border-radius: 10px; font-size: 18px; font-weight: 900; }
+            QPushButton#BtnSecondary:hover { background-color: #eff6ff; }
 
-            QPushButton#BtnFinish {
-                background-color: #0b1f33;
-                color: #ffffff;
-                border: none;
-                border-radius: 14px;
-                font-size: 18px;
-                font-weight: 800;
-            }
+            QPushButton#BtnFinish { background-color: #0b1f33; color: #ffffff; border-radius: 14px; font-size: 18px; font-weight: 800; }
             QPushButton#BtnFinish:hover { background-color: #061626; }
+
+            QFrame#HeaderFlat {
+                background: transparent;
+                border: none;
+                border-bottom: 2px solid #cbd5e1; /* สร้างเส้นคั่นสีเทาอ่อนด้านล่าง */
+            }
+            QLabel#HeaderNameNew { font-size: 26px; font-weight: 900; color: #0b1f33; }
+            QLabel#HeaderCidNew { font-size: 24px; font-weight: 900; color: #007982; } /* สีเขียวอมฟ้าแบบในรูป */
+            QLabel#HeaderSubNew { font-size: 17px; font-weight: 600; color: #64748b; }
             """
             .replace("__APP_FONT__", APP_FONT_FAMILY)
         )
