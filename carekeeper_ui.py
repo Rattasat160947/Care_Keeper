@@ -1283,7 +1283,7 @@ class CareKeeperWindow(QMainWindow):
 
 def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
     app = QApplication(sys.argv)
-    font_id = QFontDatabase.addApplicationFont("NotoSansThai-Regular.ttf")
+    font_id = QFontDatabase.addApplicationFont("IBMPlexSansThai-Regular.ttf")
     if font_id != -1:
         QFontDatabase.applicationFontFamilies(font_id)[0]
     window = CareKeeperWindow(provider, mode_name=mode_name)
