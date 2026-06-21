@@ -58,18 +58,18 @@ QLabel#SectionTitleBlue { font-size: 16px; font-weight: 900; color: #75efff; }
 QLabel#SectionTitleGreen { font-size: 16px; font-weight: 900; color: #16c75a; }
 QLabel#MetricName { font-size: 15px; font-weight: 900; color: #d1d5db; }
 QLabel#MetricUnit { font-size: 14px; font-weight: 900; color: #e5e7eb; }
-QLabel#MetricUnitLarge { font-size: 22px; font-weight: 900; color: #f8fafc; padding-top: 18px; }
-QLabel#ValueYellow { font-size: 56px; font-weight: 900; color: #fff11a; }
-QLabel#ValueYellowSmall { font-size: 42px; font-weight: 900; color: #fff11a; }
-QLabel#ValueBlue { font-size: 64px; font-weight: 900; color: #79f1ff; }
-QLabel#ValueGreen { font-size: 64px; font-weight: 900; color: #19c464; }
+QLabel#MetricUnitLarge { font-size: 26px; font-weight: 900; color: #f8fafc; padding-top: 22px; }
+QLabel#ValueYellow { font-size: 74px; font-weight: 900; color: #fff11a; }
+QLabel#ValueYellowSmall { font-size: 58px; font-weight: 900; color: #fff11a; }
+QLabel#ValueBlue { font-size: 88px; font-weight: 900; color: #79f1ff; }
+QLabel#ValueGreen { font-size: 88px; font-weight: 900; color: #19c464; }
 
 QPushButton#BtnNIBP {
     background: #fff200;
     color: #050505;
     border: none;
     border-radius: 0px;
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 900;
 }
 QPushButton#BtnSpO2Console {
@@ -77,7 +77,7 @@ QPushButton#BtnSpO2Console {
     color: #050505;
     border: none;
     border-radius: 0px;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 900;
 }
 QPushButton#BtnTempConsole {
@@ -85,7 +85,7 @@ QPushButton#BtnTempConsole {
     color: #050505;
     border: none;
     border-radius: 0px;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 900;
 }
 QPushButton:disabled { background: #374151; color: #a8b3c2; }
@@ -127,17 +127,17 @@ QPushButton#BtnBack {
     font-weight: 900;
 }
 
-QLabel#SummaryTitle { font-size: 18px; font-weight: 900; color: #ffffff; }
+QLabel#SummaryTitle { font-size: 22px; font-weight: 900; color: #ffffff; }
 QFrame#SummaryTable {
     background: #030405;
     border: 1px solid #20242a;
     border-radius: 0px;
 }
-QLabel#SummaryName { font-size: 15px; font-weight: 900; color: #f8fafc; }
-QLabel#SummaryUnit { font-size: 15px; font-weight: 900; color: #f8fafc; }
-QLabel#SummaryValueYellow { font-size: 26px; font-weight: 900; color: #fff11a; }
-QLabel#SummaryValueBlue { font-size: 26px; font-weight: 900; color: #79f1ff; }
-QLabel#SummaryValueGreen { font-size: 26px; font-weight: 900; color: #19c464; }
+QLabel#SummaryName { font-size: 18px; font-weight: 900; color: #f8fafc; }
+QLabel#SummaryUnit { font-size: 18px; font-weight: 900; color: #f8fafc; }
+QLabel#SummaryValueYellow { font-size: 42px; font-weight: 900; color: #fff11a; }
+QLabel#SummaryValueBlue { font-size: 42px; font-weight: 900; color: #79f1ff; }
+QLabel#SummaryValueGreen { font-size: 42px; font-weight: 900; color: #19c464; }
 """
 
 

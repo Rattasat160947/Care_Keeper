@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -737,6 +738,7 @@ class CareKeeperWindow(QMainWindow):
         self.btn_bp = QPushButton("START\nNIBP")
         self.btn_bp.setObjectName("BtnNIBP")
         self.btn_bp.setFixedWidth(112)
+        self.btn_bp.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.btn_bp.clicked.connect(self._measure_bp)
         measure_layout.addWidget(self.btn_bp)
 
@@ -763,7 +765,7 @@ class CareKeeperWindow(QMainWindow):
         spo2_row = QFrame()
         spo2_row.setObjectName("RightMetricRow")
         spo2_layout = QHBoxLayout(spo2_row)
-        spo2_layout.setContentsMargins(22, 15, 0, 15)
+        spo2_layout.setContentsMargins(22, 0, 0, 0)
         spo2_layout.setSpacing(0)
         spo2_box = QVBoxLayout()
         spo2_box.setSpacing(2)
@@ -779,6 +781,7 @@ class CareKeeperWindow(QMainWindow):
         self.btn_spo2 = QPushButton("START\nSpO2")
         self.btn_spo2.setObjectName("BtnSpO2Console")
         self.btn_spo2.setFixedWidth(112)
+        self.btn_spo2.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.btn_spo2.clicked.connect(self._measure_spo2)
         spo2_layout.addWidget(self.btn_spo2)
         right_layout.addWidget(spo2_row, 1)
@@ -786,7 +789,7 @@ class CareKeeperWindow(QMainWindow):
         temp_row = QFrame()
         temp_row.setObjectName("RightMetricRow")
         temp_layout = QHBoxLayout(temp_row)
-        temp_layout.setContentsMargins(22, 15, 0, 15)
+        temp_layout.setContentsMargins(22, 0, 0, 0)
         temp_layout.setSpacing(0)
         temp_box = QVBoxLayout()
         temp_box.setSpacing(2)
@@ -802,6 +805,7 @@ class CareKeeperWindow(QMainWindow):
         self.btn_temp = QPushButton("START\nTEMP")
         self.btn_temp.setObjectName("BtnTempConsole")
         self.btn_temp.setFixedWidth(112)
+        self.btn_temp.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.btn_temp.clicked.connect(self._measure_temperature)
         temp_layout.addWidget(self.btn_temp)
         right_layout.addWidget(temp_row, 1)
@@ -857,14 +861,14 @@ class CareKeeperWindow(QMainWindow):
         table = QFrame()
         table.setObjectName("SummaryTable")
         grid = QGridLayout(table)
-        grid.setContentsMargins(38, 18, 38, 18)
-        grid.setHorizontalSpacing(20)
-        grid.setVerticalSpacing(12)
+        grid.setContentsMargins(46, 16, 46, 16)
+        grid.setHorizontalSpacing(26)
+        grid.setVerticalSpacing(20)
 
-        self.sum_bp_value = self._console_label("--/--", "SummaryValueYellow", Qt.AlignRight | Qt.AlignVCenter)
-        self.sum_pulse_value = self._console_label("--", "SummaryValueYellow", Qt.AlignRight | Qt.AlignVCenter)
-        self.sum_spo2_value = self._console_label("--", "SummaryValueBlue", Qt.AlignRight | Qt.AlignVCenter)
-        self.sum_temp_value = self._console_label("--", "SummaryValueGreen", Qt.AlignRight | Qt.AlignVCenter)
+        self.sum_bp_value = self._console_label("--/--", "SummaryValueYellow", Qt.AlignCenter)
+        self.sum_pulse_value = self._console_label("--", "SummaryValueYellow", Qt.AlignCenter)
+        self.sum_spo2_value = self._console_label("--", "SummaryValueBlue", Qt.AlignCenter)
+        self.sum_temp_value = self._console_label("--", "SummaryValueGreen", Qt.AlignCenter)
 
         rows = [
             ("ความดันโลหิต Blood Pressure", self.sum_bp_value, "mmHg"),
@@ -875,10 +879,10 @@ class CareKeeperWindow(QMainWindow):
         for row_index, (name, value, unit) in enumerate(rows):
             grid.addWidget(self._console_label(name, "SummaryName"), row_index, 0)
             grid.addWidget(value, row_index, 1)
-            grid.addWidget(self._console_label(unit, "SummaryUnit"), row_index, 2)
+            grid.addWidget(self._console_label(unit, "SummaryUnit", Qt.AlignLeft | Qt.AlignVCenter), row_index, 2)
 
-        grid.setColumnStretch(0, 5)
-        grid.setColumnStretch(1, 2)
+        grid.setColumnStretch(0, 4)
+        grid.setColumnStretch(1, 3)
         grid.setColumnStretch(2, 2)
         panel_layout.addWidget(table, 1)
 
