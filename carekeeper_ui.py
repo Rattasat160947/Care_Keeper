@@ -111,7 +111,7 @@ class WifiIndicator(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
 
-        color = QColor("#0f8b8d") if self.connected else QColor("#7c92a4")
+        color = QColor("#75efff") if self.connected else QColor("#7c92a4")
         cx = 26 / 2  # ล็อกพิกัดเดิมไว้ไม่ให้เพี้ยน
         cy = 20 - 3
 
@@ -148,7 +148,7 @@ class BluetoothIndicator(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
 
-        color = QColor("#0f8b8d") if self.connected else QColor("#7c92a4")
+        color = QColor("#75efff") if self.connected else QColor("#7c92a4")
         painter.setPen(QPen(color, 1.8, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.drawLine(10, 3, 10, 17)
         painter.drawLine(10, 3, 15, 7)
@@ -173,7 +173,7 @@ class BatteryIndicator(QWidget):
         painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
 
         border = QColor("#16324f")
-        fill = QColor("#0f8b8d") if self.percent > 20 else QColor("#64748b")
+        fill = QColor("#75efff") if self.percent > 20 else QColor("#7c92a4")
         painter.setPen(QPen(border, 1.2))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(1, 1, 24, 13, 3, 3)
@@ -580,7 +580,7 @@ class CareKeeperWindow(QMainWindow):
         frame = QFrame()
         frame.setObjectName("StatusCluster")
         layout = QHBoxLayout(frame)
-        layout.setContentsMargins(10, 4, 10, 4)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
         bt = BluetoothIndicator()
@@ -592,10 +592,32 @@ class CareKeeperWindow(QMainWindow):
         wifi.clicked.connect(self._open_wifi_selector)
         bt.clicked.connect(self._open_bluetooth_selector)
 
-        layout.addWidget(bt)
-        layout.addWidget(wifi)
-        layout.addWidget(battery_text)
-        layout.addWidget(battery)
+        bt_card = QFrame()
+        bt_card.setObjectName("StatusPill")
+        bt_card.setFixedSize(68, 56)
+        bt_layout = QHBoxLayout(bt_card)
+        bt_layout.setContentsMargins(10, 4, 10, 4)
+        bt_layout.addWidget(bt, alignment=Qt.AlignCenter)
+
+        wifi_card = QFrame()
+        wifi_card.setObjectName("StatusPill")
+        wifi_card.setFixedSize(80, 56)
+        wifi_layout = QHBoxLayout(wifi_card)
+        wifi_layout.setContentsMargins(10, 4, 10, 4)
+        wifi_layout.addWidget(wifi, alignment=Qt.AlignCenter)
+
+        battery_card = QFrame()
+        battery_card.setObjectName("BatteryPill")
+        battery_card.setFixedSize(110, 56)
+        battery_layout = QHBoxLayout(battery_card)
+        battery_layout.setContentsMargins(10, 4, 10, 4)
+        battery_layout.setSpacing(6)
+        battery_layout.addWidget(battery, alignment=Qt.AlignCenter)
+        battery_layout.addWidget(battery_text, alignment=Qt.AlignCenter)
+
+        layout.addWidget(bt_card)
+        layout.addWidget(wifi_card)
+        layout.addWidget(battery_card)
 
         if not hasattr(self, "_status_widgets"):
             self._status_widgets = []
@@ -873,7 +895,7 @@ class CareKeeperWindow(QMainWindow):
         rows = [
             ("ความดันโลหิต Blood Pressure", self.sum_bp_value, "mmHg"),
             ("อัตราการเต้นของหัวใจ Pulse", self.sum_pulse_value, "bpm"),
-            ("ออกซิเจนในเลือด Oxygen Saturation", self.sum_spo2_value, "%SpO2"),
+            ("ออกซิเจนในเลือด Oxygen Saturation", self.sum_spo2_value, "%"),
             ("อุณหภูมิร่างกาย Body Temperature", self.sum_temp_value, "°C"),
         ]
         for row_index, (name, value, unit) in enumerate(rows):

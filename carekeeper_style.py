@@ -15,11 +15,15 @@ QLabel#HeaderNameConsole { font-size: 19px; font-weight: 900; color: #ffffff; }
 QLabel#HeaderCidConsole { font-size: 16px; font-weight: 900; color: #0b63ff; }
 QLabel#HeaderSubConsole { font-size: 13px; font-weight: 700; color: #d8dee9; }
 QFrame#StatusCluster {
+    background: transparent;
+    border: none;
+}
+QFrame#StatusPill, QFrame#BatteryPill {
     background: #07090c;
     border: 1px solid #1f2937;
     border-radius: 14px;
 }
-QLabel#ConsoleBatteryLabel { font-size: 13px; font-weight: 900; color: #ffffff; }
+QLabel#ConsoleBatteryLabel { font-size: 14px; font-weight: 900; color: #ffffff; }
 
 QLabel#ScanBrand { font-size: 28px; font-weight: 900; color: #9aff2d; letter-spacing: 0.5px; }
 QFrame#ScanPanel {
