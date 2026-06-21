@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import random
+import re
 import subprocess
 import sys
 import time
+import uuid
 import requests
 from dataclasses import dataclass
+from pathlib import Path
 
 
 # ยังไม่ได้เอาใส่ .env เพราะจะได้เทสง่าย
@@ -18,6 +21,32 @@ TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
 TEST_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/add_health"
 TEST_API_KEY_HEADER = "api-key"
 TEST_API_KEY = "test"
+
+
+def read_device_mac() -> str:
+    for address_file in sorted(Path("/sys/class/net").glob("*/address")):
+        if address_file.parent.name == "lo":
+            continue
+        try:
+            mac = address_file.read_text(encoding="utf-8").strip().lower()
+            if re.fullmatch(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}", mac) and mac != "00:00:00:00:00:00":
+                return mac
+        except Exception:
+            continue
+
+    try:
+        output = subprocess.check_output(["ip", "link"], text=True, errors="ignore")
+        match = re.search(r"link/ether\s+([0-9a-f:]{17})", output, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+    except Exception:
+        pass
+
+    node = uuid.getnode()
+    if node and (node >> 40) % 2 == 0:
+        return ":".join(f"{(node >> shift) & 0xff:02x}" for shift in range(40, -1, -8))
+
+    return TEST_DEVICE_MAC
 
 
 @dataclass
@@ -88,7 +117,7 @@ class MockCareKeeperProvider(CareKeeperProvider):
 
     def __init__(self) -> None:
         self._battery_percent = 100
-        self.device_mac = TEST_DEVICE_MAC
+        self.device_mac = read_device_mac()
 
     def read_patient(self) -> PatientInfo:
         time.sleep(1.0)
@@ -170,7 +199,7 @@ class RealCareKeeperProvider(CareKeeperProvider):
         h59_device_address: str | None = None,
         api_url: str | None = None,
     ) -> None:
-        self.device_mac = TEST_DEVICE_MAC
+        self.device_mac = read_device_mac()
         self.bp_port = bp_port or TEST_BP_PORT
         self.h59_device_name = h59_device_name or TEST_H59_DEVICE_NAME
         self.h59_device_address = h59_device_address or TEST_H59_DEVICE_ADDRESS

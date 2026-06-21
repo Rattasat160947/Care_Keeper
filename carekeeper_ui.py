@@ -1338,6 +1338,726 @@ class CareKeeperWindow(QMainWindow):
         self.btn_finish.setText("ส่งข้อมูลและเสร็จสิ้นการตรวจ")
         self._show_popup(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False, duration_ms=3000)
 
+    # Redesign override methods for the dark medical-console UI.
+    def _status_cluster(self, welcome: bool = False) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("StatusCluster")
+        layout = QHBoxLayout(frame)
+        layout.setContentsMargins(10, 4, 10, 4)
+        layout.setSpacing(8)
+
+        bt = BluetoothIndicator()
+        wifi = WifiIndicator()
+        battery = BatteryIndicator()
+        battery_text = QLabel("0%")
+        battery_text.setObjectName("ConsoleBatteryLabel")
+
+        wifi.clicked.connect(self._open_wifi_selector)
+        bt.clicked.connect(self._open_bluetooth_selector)
+
+        layout.addWidget(bt)
+        layout.addWidget(wifi)
+        layout.addWidget(battery_text)
+        layout.addWidget(battery)
+
+        if not hasattr(self, "_status_widgets"):
+            self._status_widgets = []
+        self._status_widgets.append((bt, wifi, battery, battery_text))
+
+        if welcome:
+            self.bt_ind_welcome = bt
+            self.wifi_ind_welcome = wifi
+            self.bat_ind_welcome = battery
+            self.lbl_bat_welcome = battery_text
+        else:
+            self.bluetooth_indicator = bt
+            self.wifi_indicator = wifi
+            self.battery_indicator = battery
+            self.lbl_battery_text = battery_text
+
+        return frame
+
+    def _on_status_done(self, result: object) -> None:
+        if not isinstance(result, DeviceStatus):
+            return
+
+        for bt, wifi, battery, battery_text in getattr(self, "_status_widgets", []):
+            battery_text.setText(f"{result.battery_percent}%")
+            battery.set_percent(result.battery_percent)
+            wifi.set_connected(result.wifi_connected)
+            bt.set_connected(result.bluetooth_connected)
+
+    def _read_card(self) -> None:
+        self.btn_card.setText("กำลังอ่านข้อมูลบัตร...")
+        self.btn_card.setEnabled(False)
+        self._set_system_message("กำลังอ่านข้อมูลจากบัตรประชาชน", success=None)
+        self._start_task(self.provider.read_patient, self._on_patient_read, self._on_patient_failed)
+
+    def _refresh_patient(self) -> None:
+        display_name = self.patient.th_name
+        if self.patient.en_name and self.patient.en_name != "-":
+            display_name = f"{self.patient.th_name} ({self.patient.en_name})"
+
+        for name, cid, dob, address in (
+            (self.lbl_name, self.lbl_cid, self.lbl_dob, self.lbl_address),
+            (self.sum_lbl_name, self.sum_lbl_cid, self.sum_lbl_dob, self.sum_lbl_address),
+        ):
+            name.setText(display_name)
+            cid.setText(self.patient.cid)
+            dob.setText(f"เกิด: {self.patient.birth_date}")
+            address.setText(self.patient.address)
+
+    def _console_label(self, text: str, object_name: str, alignment: Qt.AlignmentFlag = Qt.AlignLeft | Qt.AlignVCenter) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        label.setAlignment(alignment)
+        return label
+
+    def _metric_row(self, name: str, value_label: QLabel, unit: str, value_color_name: str) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        lbl_name = self._console_label(name, "MetricName")
+        lbl_name.setFixedWidth(54)
+        unit_label = self._console_label(unit, "MetricUnit")
+        unit_label.setFixedWidth(58)
+        value_label.setObjectName(value_color_name)
+        row.addWidget(lbl_name)
+        row.addWidget(value_label, 1)
+        row.addWidget(unit_label)
+        return row
+
+    def _build_scan_page(self) -> None:
+        root = QWidget()
+        root.setObjectName("RootBg")
+        outer = QVBoxLayout(root)
+        outer.setContentsMargins(14, 12, 14, 12)
+        outer.setSpacing(12)
+
+        top = QHBoxLayout()
+        brand = self._console_label("carekeeper", "ScanBrand")
+        top.addWidget(brand)
+        top.addStretch()
+        top.addWidget(self._status_cluster(welcome=True))
+        self.btn_power = PowerButton()
+        self.btn_power.clicked.connect(self._open_power_menu)
+        top.addWidget(self.btn_power)
+        outer.addLayout(top)
+
+        card = QFrame()
+        card.setObjectName("ScanPanel")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(58, 34, 58, 34)
+        card_layout.setSpacing(18)
+
+        title = self._console_label("สแกนบัตรประชาชน", "ScanTitle", Qt.AlignCenter)
+        subtitle = self._console_label(
+            "วางบัตรประชาชนบนเครื่องอ่านบัตรเพื่อเริ่มการตรวจ",
+            "ScanSubtitle",
+            Qt.AlignCenter,
+        )
+        subtitle.setWordWrap(True)
+
+        self.btn_card = QPushButton("อ่านข้อมูลบัตร")
+        self.btn_card.setObjectName("BtnScanCard")
+        self.btn_card.setFixedHeight(62)
+        self.btn_card.clicked.connect(self._read_card)
+
+        self.lbl_scan_message = self._console_label("SYSTEM: พร้อมอ่านข้อมูลบัตร", "SystemMessageNeutral", Qt.AlignCenter)
+        self.lbl_scan_message.setWordWrap(True)
+
+        card_layout.addStretch(1)
+        card_layout.addWidget(title)
+        card_layout.addWidget(subtitle)
+        card_layout.addSpacing(18)
+        card_layout.addWidget(self.btn_card)
+        card_layout.addWidget(self.lbl_scan_message)
+        card_layout.addStretch(1)
+
+        outer.addWidget(card, 1)
+        self.stack.addWidget(root)
+
+    def _build_dashboard_page(self) -> None:
+        root = QWidget()
+        root.setObjectName("RootBg")
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        layout.addWidget(self._build_patient_header(summary=False))
+
+        panel = QFrame()
+        panel.setObjectName("ConsolePanel")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(0)
+
+        measure = QFrame()
+        measure.setObjectName("MeasureGrid")
+        measure_layout = QHBoxLayout(measure)
+        measure_layout.setContentsMargins(0, 0, 0, 0)
+        measure_layout.setSpacing(0)
+
+        self.btn_bp = QPushButton("START\nNIBP")
+        self.btn_bp.setObjectName("BtnNIBP")
+        self.btn_bp.setFixedWidth(112)
+        self.btn_bp.clicked.connect(self._measure_bp)
+        measure_layout.addWidget(self.btn_bp)
+
+        nibp = QFrame()
+        nibp.setObjectName("NibpSection")
+        nibp_layout = QVBoxLayout(nibp)
+        nibp_layout.setContentsMargins(28, 18, 26, 18)
+        nibp_layout.setSpacing(8)
+        nibp_layout.addWidget(self._console_label("NIBP", "SectionTitleYellow"))
+        self.lbl_sys_value = self._console_label("--", "ValueYellow")
+        self.lbl_dia_value = self._console_label("--", "ValueYellow")
+        self.lbl_pulse_value = self._console_label("--", "ValueYellowSmall")
+        nibp_layout.addLayout(self._metric_row("SYS", self.lbl_sys_value, "mmHg", "ValueYellow"))
+        nibp_layout.addLayout(self._metric_row("DIA", self.lbl_dia_value, "mmHg", "ValueYellow"))
+        nibp_layout.addLayout(self._metric_row("PUL", self.lbl_pulse_value, "bpm", "ValueYellowSmall"))
+        measure_layout.addWidget(nibp, 5)
+
+        right = QFrame()
+        right.setObjectName("RightMeasureColumn")
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
+        spo2_row = QFrame()
+        spo2_row.setObjectName("RightMetricRow")
+        spo2_layout = QHBoxLayout(spo2_row)
+        spo2_layout.setContentsMargins(22, 15, 0, 15)
+        spo2_layout.setSpacing(0)
+        spo2_box = QVBoxLayout()
+        spo2_box.setSpacing(2)
+        spo2_box.addWidget(self._console_label("SPO2", "SectionTitleBlue"))
+        spo2_value_row = QHBoxLayout()
+        spo2_value_row.setSpacing(14)
+        self.lbl_spo2_value = self._console_label("--", "ValueBlue")
+        spo2_value_row.addWidget(self.lbl_spo2_value)
+        spo2_value_row.addWidget(self._console_label("%", "MetricUnitLarge"))
+        spo2_value_row.addStretch()
+        spo2_box.addLayout(spo2_value_row)
+        spo2_layout.addLayout(spo2_box, 1)
+        self.btn_spo2 = QPushButton("START\nSpO2")
+        self.btn_spo2.setObjectName("BtnSpO2Console")
+        self.btn_spo2.setFixedWidth(112)
+        self.btn_spo2.clicked.connect(self._measure_spo2)
+        spo2_layout.addWidget(self.btn_spo2)
+        right_layout.addWidget(spo2_row, 1)
+
+        temp_row = QFrame()
+        temp_row.setObjectName("RightMetricRow")
+        temp_layout = QHBoxLayout(temp_row)
+        temp_layout.setContentsMargins(22, 15, 0, 15)
+        temp_layout.setSpacing(0)
+        temp_box = QVBoxLayout()
+        temp_box.setSpacing(2)
+        temp_box.addWidget(self._console_label("TEMP", "SectionTitleGreen"))
+        temp_value_row = QHBoxLayout()
+        temp_value_row.setSpacing(10)
+        self.lbl_temp_value = self._console_label("--", "ValueGreen")
+        temp_value_row.addWidget(self.lbl_temp_value)
+        temp_value_row.addWidget(self._console_label("°C", "MetricUnitLarge"))
+        temp_value_row.addStretch()
+        temp_box.addLayout(temp_value_row)
+        temp_layout.addLayout(temp_box, 1)
+        self.btn_temp = QPushButton("START\nTEMP")
+        self.btn_temp.setObjectName("BtnTempConsole")
+        self.btn_temp.setFixedWidth(112)
+        self.btn_temp.clicked.connect(self._measure_temperature)
+        temp_layout.addWidget(self.btn_temp)
+        right_layout.addWidget(temp_row, 1)
+
+        measure_layout.addWidget(right, 6)
+        panel_layout.addWidget(measure, 1)
+
+        footer = QFrame()
+        footer.setObjectName("ConsoleFooter")
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(16, 8, 14, 8)
+        footer_layout.setSpacing(12)
+        self.lbl_system_message = self._console_label("SYSTEM: รอคำสั่งวัดค่า", "SystemMessageNeutral")
+        self.lbl_measure_count = self._console_label("วัดค่าสำเร็จแล้ว 0 รายการ", "FooterHint")
+        footer_layout.addWidget(self.lbl_system_message, 2)
+        footer_layout.addWidget(self.lbl_measure_count, 1)
+        self.btn_summary = QPushButton("สรุปผลการวัด  >")
+        self.btn_summary.setObjectName("BtnSummaryDisabled")
+        self.btn_summary.setFixedSize(230, 40)
+        self.btn_summary.setEnabled(False)
+        self.btn_summary.clicked.connect(self._show_summary)
+        footer_layout.addWidget(self.btn_summary)
+        panel_layout.addWidget(footer)
+
+        layout.addWidget(panel, 1)
+        self.stack.addWidget(root)
+
+    def _build_summary_page(self) -> None:
+        root = QWidget()
+        root.setObjectName("RootBg")
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        layout.addWidget(self._build_patient_header(summary=True))
+
+        panel = QFrame()
+        panel.setObjectName("SummaryPanel")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(24, 18, 24, 16)
+        panel_layout.setSpacing(12)
+
+        top = QHBoxLayout()
+        top.addWidget(self._console_label("ข้อมูลผลการวัด (Measurement Summary)", "SummaryTitle"))
+        top.addStretch()
+        btn_remeasure = QPushButton("เริ่มวัดอีกครั้ง")
+        btn_remeasure.setObjectName("BtnSummarySmall")
+        btn_remeasure.setFixedSize(170, 34)
+        btn_remeasure.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+        top.addWidget(btn_remeasure)
+        panel_layout.addLayout(top)
+
+        table = QFrame()
+        table.setObjectName("SummaryTable")
+        grid = QGridLayout(table)
+        grid.setContentsMargins(38, 18, 38, 18)
+        grid.setHorizontalSpacing(20)
+        grid.setVerticalSpacing(12)
+
+        self.sum_bp_value = self._console_label("--/--", "SummaryValueYellow", Qt.AlignRight | Qt.AlignVCenter)
+        self.sum_pulse_value = self._console_label("--", "SummaryValueYellow", Qt.AlignRight | Qt.AlignVCenter)
+        self.sum_spo2_value = self._console_label("--", "SummaryValueBlue", Qt.AlignRight | Qt.AlignVCenter)
+        self.sum_temp_value = self._console_label("--", "SummaryValueGreen", Qt.AlignRight | Qt.AlignVCenter)
+
+        rows = [
+            ("ความดันโลหิต Blood Pressure", self.sum_bp_value, "mmHg"),
+            ("อัตราการเต้นของหัวใจ Pulse", self.sum_pulse_value, "bpm"),
+            ("ออกซิเจนในเลือด Oxygen Saturation", self.sum_spo2_value, "%SpO2"),
+            ("อุณหภูมิร่างกาย Body Temperature", self.sum_temp_value, "°C"),
+        ]
+        for row_index, (name, value, unit) in enumerate(rows):
+            grid.addWidget(self._console_label(name, "SummaryName"), row_index, 0)
+            grid.addWidget(value, row_index, 1)
+            grid.addWidget(self._console_label(unit, "SummaryUnit"), row_index, 2)
+
+        grid.setColumnStretch(0, 5)
+        grid.setColumnStretch(1, 2)
+        grid.setColumnStretch(2, 2)
+        panel_layout.addWidget(table, 1)
+
+        self.lbl_summary_system_message = self._console_label("SYSTEM: ตรวจสอบข้อมูลก่อนบันทึก", "SystemMessageNeutral")
+        panel_layout.addWidget(self.lbl_summary_system_message)
+
+        footer = QHBoxLayout()
+        self.btn_back_home = QPushButton("ย้อนกลับหน้าแรก")
+        self.btn_back_home.setObjectName("BtnBack")
+        self.btn_back_home.setFixedSize(170, 40)
+        self.btn_back_home.clicked.connect(self._reset_session)
+        footer.addWidget(self.btn_back_home)
+        footer.addStretch()
+        self.btn_finish = QPushButton("บันทึกข้อมูล  >")
+        self.btn_finish.setObjectName("BtnFinish")
+        self.btn_finish.setFixedSize(260, 42)
+        self.btn_finish.clicked.connect(self._submit_data)
+        footer.addWidget(self.btn_finish)
+        panel_layout.addLayout(footer)
+
+        layout.addWidget(panel, 1)
+        self.stack.addWidget(root)
+
+    def _build_patient_header(self, summary: bool) -> QFrame:
+        header = QFrame()
+        header.setObjectName("ConsoleHeader")
+        layout = QHBoxLayout(header)
+        layout.setContentsMargins(14, 8, 14, 8)
+        layout.setSpacing(12)
+
+        info = QVBoxLayout()
+        info.setSpacing(2)
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        lbl_name = self._console_label("-", "HeaderNameConsole")
+        lbl_cid = self._console_label("-", "HeaderCidConsole")
+        row1.addWidget(lbl_name)
+        row1.addWidget(lbl_cid)
+        row1.addStretch()
+        row2 = QHBoxLayout()
+        row2.setSpacing(12)
+        lbl_dob = self._console_label("เกิด: -", "HeaderSubConsole")
+        lbl_address = self._console_label("-", "HeaderSubConsole")
+        row2.addWidget(lbl_dob)
+        row2.addWidget(lbl_address, 1)
+        info.addLayout(row1)
+        info.addLayout(row2)
+        layout.addLayout(info, 1)
+        layout.addWidget(self._status_cluster(welcome=False))
+        
+        if summary:
+            self.sum_lbl_name = lbl_name
+            self.sum_lbl_cid = lbl_cid
+            self.sum_lbl_dob = lbl_dob
+            self.sum_lbl_address = lbl_address
+        else:
+            self.lbl_name = lbl_name
+            self.lbl_cid = lbl_cid
+            self.lbl_dob = lbl_dob
+            self.lbl_address = lbl_address
+
+        return header
+
+    def _measured_count(self) -> int:
+        return sum(
+            1
+            for done in (
+                self.vitals.systolic is not None and self.vitals.diastolic is not None,
+                self.vitals.spo2 is not None,
+                self.vitals.temperature is not None,
+            )
+            if done
+        )
+
+    def _set_system_message(self, message: str, success: bool | None = None) -> None:
+        object_name = "SystemMessageNeutral"
+        prefix = "SYSTEM"
+        if success is True:
+            object_name = "SystemMessageSuccess"
+            prefix = "SUCCESSFUL"
+        elif success is False:
+            object_name = "SystemMessageFail"
+            prefix = "FAIL"
+
+        text = f"{prefix}: {message}"
+        for label_name in ("lbl_system_message", "lbl_summary_system_message", "lbl_scan_message"):
+            label = getattr(self, label_name, None)
+            if label is None:
+                continue
+            label.setObjectName(object_name)
+            label.setText(text)
+            label.style().unpolish(label)
+            label.style().polish(label)
+
+    def _refresh_values(self) -> None:
+        sys_text = self._format_int(self.vitals.systolic)
+        dia_text = self._format_int(self.vitals.diastolic)
+        bp_text = "--/--"
+        if self.vitals.systolic is not None and self.vitals.diastolic is not None:
+            bp_text = f"{self.vitals.systolic}/{self.vitals.diastolic}"
+
+        pulse_text = self._format_int(self.vitals.pulse)
+        spo2_text = self._format_int(self.vitals.spo2)
+        temp_text = "--" if self.vitals.temperature is None else f"{self.vitals.temperature:.1f}"
+
+        if hasattr(self, "lbl_sys_value"):
+            self.lbl_sys_value.setText(sys_text)
+            self.lbl_dia_value.setText(dia_text)
+            self.lbl_pulse_value.setText(pulse_text)
+            self.lbl_spo2_value.setText(spo2_text)
+            self.lbl_temp_value.setText(temp_text)
+
+        self.sum_bp_value.setText(bp_text)
+        self.sum_pulse_value.setText(pulse_text)
+        self.sum_spo2_value.setText(spo2_text)
+        self.sum_temp_value.setText(temp_text)
+
+        self._refresh_summary_badges()
+        self._refresh_summary_button()
+
+    def _refresh_summary_button(self) -> None:
+        count = self._measured_count()
+        has_data = count > 0
+        if hasattr(self, "lbl_measure_count"):
+            self.lbl_measure_count.setText(f"วัดค่าสำเร็จแล้ว {count} รายการ")
+        self.btn_summary.setEnabled(has_data)
+        self.btn_summary.setObjectName("BtnSummaryReady" if has_data else "BtnSummaryDisabled")
+        self.btn_summary.setText("สรุปผลการวัด  >" if has_data else "รอผลการวัด")
+        self.btn_summary.style().unpolish(self.btn_summary)
+        self.btn_summary.style().polish(self.btn_summary)
+
+    def _refresh_summary_badges(self) -> None:
+        return
+
+    def _on_patient_read(self, result: object) -> None:
+        self.patient = result if isinstance(result, PatientInfo) else PatientInfo()
+        self.vitals = VitalState()
+        self.btn_card.setText("อ่านข้อมูลบัตร")
+        self.btn_card.setEnabled(True)
+        self._refresh_patient()
+        self._refresh_values()
+        self._set_system_message("อ่านข้อมูลบัตรสำเร็จ", success=True)
+        self.stack.setCurrentIndex(1)
+
+    def _on_patient_failed(self, message: str) -> None:
+        self.btn_card.setText("อ่านข้อมูลบัตร")
+        self.btn_card.setEnabled(True)
+        self._set_system_message(f"อ่านบัตรไม่สำเร็จ: {message}", success=False)
+        self._show_popup(f"อ่านบัตรไม่สำเร็จ: {message}", success=False, duration_ms=2500)
+
+    def _measure_bp(self) -> None:
+        if self.bp_cooldown_seconds > 0:
+            return
+        self.btn_bp.setText("MEASURING\nNIBP")
+        self.btn_bp.setEnabled(False)
+        self._set_system_message("กำลังวัดความดันโลหิต", success=None)
+        self._start_task(self.provider.measure_blood_pressure, self._on_bp_done, self._on_bp_failed)
+
+    def _on_bp_done(self, result: object) -> None:
+        if isinstance(result, BloodPressureReading):
+            self.vitals.systolic = result.systolic
+            self.vitals.diastolic = result.diastolic
+            self.vitals.pulse = result.pulse
+        self.bp_cooldown_seconds = 60
+        self.cooldown_timer.start(1000)
+        self.btn_bp.setText(f"WAIT\n{self.bp_cooldown_seconds}s")
+        self._set_system_message("วัดความดันโลหิตสำเร็จ", success=True)
+        self._refresh_values()
+
+    def _on_bp_failed(self, message: str) -> None:
+        self.btn_bp.setEnabled(True)
+        self.btn_bp.setText("START\nNIBP")
+        self._set_system_message(f"วัดความดันไม่สำเร็จ: {message}", success=False)
+        self._show_popup(f"วัดความดันไม่สำเร็จ: {message}", success=False, duration_ms=2500)
+
+    def _measure_spo2(self) -> None:
+        self.btn_spo2.setText("MEASURING\nSpO2")
+        self.btn_spo2.setEnabled(False)
+        self._set_system_message("กำลังวัดออกซิเจนในเลือด", success=None)
+        self._start_task(self.provider.measure_spo2, self._on_spo2_done, self._on_spo2_failed)
+
+    def _on_spo2_done(self, result: object) -> None:
+        self.vitals.spo2 = int(result)
+        self.btn_spo2.setEnabled(True)
+        self.btn_spo2.setText("START\nSpO2")
+        self._set_system_message("วัดออกซิเจนในเลือดสำเร็จ", success=True)
+        self._refresh_values()
+
+    def _on_spo2_failed(self, message: str) -> None:
+        self.btn_spo2.setEnabled(True)
+        self.btn_spo2.setText("START\nSpO2")
+        self._set_system_message(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False)
+        self._show_popup(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False, duration_ms=2500)
+
+    def _measure_temperature(self) -> None:
+        self.btn_temp.setText("MEASURING\nTEMP")
+        self.btn_temp.setEnabled(False)
+        self._set_system_message("กำลังวัดอุณหภูมิร่างกาย", success=None)
+        self._start_task(self.provider.measure_temperature, self._on_temperature_done, self._on_temperature_failed)
+
+    def _on_temperature_done(self, result: object) -> None:
+        self.vitals.temperature = float(result)
+        self.btn_temp.setEnabled(True)
+        self.btn_temp.setText("START\nTEMP")
+        self._set_system_message("วัดอุณหภูมิร่างกายสำเร็จ", success=True)
+        self._refresh_values()
+
+    def _on_temperature_failed(self, message: str) -> None:
+        self.btn_temp.setEnabled(True)
+        self.btn_temp.setText("START\nTEMP")
+        self._set_system_message(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False)
+        self._show_popup(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False, duration_ms=2500)
+
+    def _reset_session(self) -> None:
+        self.patient = PatientInfo()
+        self.vitals = VitalState()
+        self.bp_cooldown_seconds = 0
+        self.cooldown_timer.stop()
+        self.btn_bp.setEnabled(True)
+        self.btn_bp.setText("START\nNIBP")
+        self.btn_spo2.setEnabled(True)
+        self.btn_spo2.setText("START\nSpO2")
+        self.btn_temp.setEnabled(True)
+        self.btn_temp.setText("START\nTEMP")
+        self.btn_finish.setEnabled(True)
+        self.btn_finish.setText("บันทึกข้อมูล  >")
+        self._refresh_patient()
+        self._refresh_values()
+        self._set_system_message("พร้อมอ่านข้อมูลบัตร", success=None)
+        self.stack.setCurrentIndex(0)
+
+    def _bp_cooldown_tick(self) -> None:
+        if self.bp_cooldown_seconds > 0:
+            self.bp_cooldown_seconds -= 1
+            self.btn_bp.setText(f"WAIT\n{self.bp_cooldown_seconds}s")
+            return
+        self.cooldown_timer.stop()
+        self.btn_bp.setEnabled(True)
+        self.btn_bp.setText("START\nNIBP")
+
+    def _submit_data(self) -> None:
+        payload = {
+            "mac": getattr(self.provider, "device_mac", "11.11.11.11"),
+            "spo2": self.vitals.spo2,
+            "heart_rate": self.vitals.pulse,
+            "pr_bpm": self.vitals.pulse,
+            "sys": self.vitals.systolic,
+            "dia": self.vitals.diastolic,
+            "pulse": self.vitals.pulse,
+        }
+
+        self.btn_finish.setText("กำลังบันทึกข้อมูล...")
+        self.btn_finish.setEnabled(False)
+        self._set_system_message("กำลังส่งข้อมูลเข้าสู่ระบบ", success=None)
+        self._start_task(
+            lambda: self.provider.send_data(payload),
+            self._on_submit_success,
+            self._on_submit_failed,
+        )
+
+    def _on_submit_success(self, result: object) -> None:
+        self.btn_finish.setEnabled(True)
+        self.btn_finish.setText("บันทึกข้อมูล  >")
+        self._set_system_message("บันทึกข้อมูลสัญญาณชีพสำเร็จ", success=True)
+        self._show_popup("บันทึกข้อมูลสำเร็จ", success=True)
+        QTimer.singleShot(2000, self._reset_session)
+
+    def _on_submit_failed(self, message: str) -> None:
+        self.btn_finish.setEnabled(True)
+        self.btn_finish.setText("บันทึกข้อมูล  >")
+        self._set_system_message(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False)
+        self._show_popup(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False, duration_ms=3000)
+
+    def _apply_styles(self) -> None:
+        self.setStyleSheet(
+            """
+            * { font-family: "__APP_FONT__", "Noto Sans Thai", sans-serif; color: #f8fafc; font-weight: 700; }
+            QWidget#RootBg { background-color: #1f2328; }
+
+            QFrame#ConsoleHeader {
+                background: #050709;
+                border: 1px solid #262b31;
+                border-radius: 0px;
+            }
+            QLabel#HeaderNameConsole { font-size: 19px; font-weight: 900; color: #ffffff; }
+            QLabel#HeaderCidConsole { font-size: 16px; font-weight: 900; color: #0b63ff; }
+            QLabel#HeaderSubConsole { font-size: 13px; font-weight: 700; color: #d8dee9; }
+            QFrame#StatusCluster {
+                background: #07090c;
+                border: 1px solid #1f2937;
+                border-radius: 14px;
+            }
+            QLabel#ConsoleBatteryLabel { font-size: 13px; font-weight: 900; color: #ffffff; }
+
+            QLabel#ScanBrand { font-size: 28px; font-weight: 900; color: #9aff2d; letter-spacing: 0.5px; }
+            QFrame#ScanPanel {
+                background: #050709;
+                border: 1px solid #252a31;
+                border-radius: 0px;
+            }
+            QLabel#ScanTitle { font-size: 44px; font-weight: 900; color: #f8fafc; }
+            QLabel#ScanSubtitle { font-size: 22px; font-weight: 800; color: #cbd5e1; }
+            QPushButton#BtnScanCard {
+                background: #0b7cff;
+                color: #ffffff;
+                border: none;
+                border-radius: 20px;
+                font-size: 24px;
+                font-weight: 900;
+            }
+            QPushButton#BtnScanCard:hover { background: #2490ff; }
+            QPushButton#BtnScanCard:disabled { background: #1f2937; color: #94a3b8; }
+
+            QFrame#ConsolePanel, QFrame#SummaryPanel {
+                background: #050709;
+                border: 1px solid #252a31;
+                border-radius: 0px;
+            }
+            QFrame#MeasureGrid {
+                background: #030405;
+                border-bottom: 1px solid #20242a;
+            }
+            QFrame#NibpSection, QFrame#RightMeasureColumn, QFrame#RightMetricRow {
+                background: #030405;
+                border-left: 1px solid #20242a;
+            }
+            QLabel#SectionTitleYellow { font-size: 16px; font-weight: 900; color: #ffed00; }
+            QLabel#SectionTitleBlue { font-size: 16px; font-weight: 900; color: #75efff; }
+            QLabel#SectionTitleGreen { font-size: 16px; font-weight: 900; color: #16c75a; }
+            QLabel#MetricName { font-size: 15px; font-weight: 900; color: #d1d5db; }
+            QLabel#MetricUnit { font-size: 14px; font-weight: 900; color: #e5e7eb; }
+            QLabel#MetricUnitLarge { font-size: 22px; font-weight: 900; color: #f8fafc; padding-top: 18px; }
+            QLabel#ValueYellow { font-size: 56px; font-weight: 900; color: #fff11a; }
+            QLabel#ValueYellowSmall { font-size: 42px; font-weight: 900; color: #fff11a; }
+            QLabel#ValueBlue { font-size: 64px; font-weight: 900; color: #79f1ff; }
+            QLabel#ValueGreen { font-size: 64px; font-weight: 900; color: #19c464; }
+
+            QPushButton#BtnNIBP {
+                background: #fff200;
+                color: #050505;
+                border: none;
+                border-radius: 0px;
+                font-size: 20px;
+                font-weight: 900;
+            }
+            QPushButton#BtnSpO2Console {
+                background: #6deeff;
+                color: #050505;
+                border: none;
+                border-radius: 0px;
+                font-size: 18px;
+                font-weight: 900;
+            }
+            QPushButton#BtnTempConsole {
+                background: #19c85d;
+                color: #050505;
+                border: none;
+                border-radius: 0px;
+                font-size: 18px;
+                font-weight: 900;
+            }
+            QPushButton:disabled { background: #374151; color: #a8b3c2; }
+
+            QFrame#ConsoleFooter {
+                background: #050709;
+                border-top: 1px solid #20242a;
+            }
+            QLabel#FooterHint { font-size: 14px; font-weight: 900; color: #ffffff; }
+            QLabel#SystemMessageNeutral { font-size: 14px; font-weight: 900; color: #f8fafc; }
+            QLabel#SystemMessageSuccess { font-size: 14px; font-weight: 900; color: #4ade80; }
+            QLabel#SystemMessageFail { font-size: 14px; font-weight: 900; color: #fb7185; }
+
+            QPushButton#BtnSummaryDisabled {
+                background: #1f2937;
+                color: #94a3b8;
+                border: 1px solid #334155;
+                border-radius: 18px;
+                font-size: 16px;
+                font-weight: 900;
+            }
+            QPushButton#BtnSummaryReady, QPushButton#BtnFinish, QPushButton#BtnSummarySmall {
+                background: #0b7cff;
+                color: #ffffff;
+                border: none;
+                border-radius: 18px;
+                font-size: 16px;
+                font-weight: 900;
+            }
+            QPushButton#BtnSummaryReady:hover, QPushButton#BtnFinish:hover, QPushButton#BtnSummarySmall:hover {
+                background: #2490ff;
+            }
+            QPushButton#BtnBack {
+                background: transparent;
+                color: #e5e7eb;
+                border: 1px solid #334155;
+                border-radius: 18px;
+                font-size: 14px;
+                font-weight: 900;
+            }
+
+            QLabel#SummaryTitle { font-size: 18px; font-weight: 900; color: #ffffff; }
+            QFrame#SummaryTable {
+                background: #030405;
+                border: 1px solid #20242a;
+                border-radius: 0px;
+            }
+            QLabel#SummaryName { font-size: 15px; font-weight: 900; color: #f8fafc; }
+            QLabel#SummaryUnit { font-size: 15px; font-weight: 900; color: #f8fafc; }
+            QLabel#SummaryValueYellow { font-size: 26px; font-weight: 900; color: #fff11a; }
+            QLabel#SummaryValueBlue { font-size: 26px; font-weight: 900; color: #79f1ff; }
+            QLabel#SummaryValueGreen { font-size: 26px; font-weight: 900; color: #19c464; }
+            """
+            .replace("__APP_FONT__", APP_FONT_FAMILY)
+        )
+
 
 def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
     global APP_FONT_FAMILY
