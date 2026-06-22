@@ -667,6 +667,46 @@ class CareKeeperWindow(QMainWindow):
         self._set_system_message("กำลังอ่านข้อมูลจากบัตรประชาชน", success=None)
         self._start_task(self.provider.read_patient, self._on_patient_read, self._on_patient_failed)
 
+    def _show_manual_cid_entry(self) -> None:
+        self.scan_title.hide()
+        self.scan_subtitle.hide()
+        self.btn_card.hide()
+        self.manual_cid_panel.show()
+        self.btn_manual_card.hide()
+        self.txt_manual_cid.setFocus()
+        self._set_system_message("กรอกเลขบัตรประชาชน 13 หลักเมื่อเครื่องอ่านบัตรไม่พร้อมใช้งาน", success=None)
+
+    def _hide_manual_cid_entry(self) -> None:
+        self.txt_manual_cid.clear()
+        self.manual_cid_panel.hide()
+        self.btn_manual_card.show()
+        self.btn_card.show()
+        self.scan_title.show()
+        self.scan_subtitle.show()
+        self._set_system_message("พร้อมอ่านข้อมูลบัตร", success=None)
+
+    def _submit_manual_cid(self) -> None:
+        cid = "".join(ch for ch in self.txt_manual_cid.text() if ch.isdigit())
+        if len(cid) != 13:
+            self._set_system_message("กรุณากรอกเลขบัตรประชาชนให้ครบ 13 หลัก", success=False)
+            self._show_popup("กรุณากรอกเลขบัตรประชาชนให้ครบ 13 หลัก", success=False, duration_ms=2200)
+            return
+
+        self.patient = PatientInfo(
+            cid=cid,
+            th_name="--",
+            en_name="-",
+            birth_date="--",
+            address="--",
+        )
+        self.vitals = VitalState()
+        self._hide_manual_cid_entry()
+        self.btn_card.setEnabled(True)
+        self._refresh_patient()
+        self._refresh_values()
+        self._set_system_message("กรอกเลขบัตรประชาชนสำเร็จ", success=True)
+        self.stack.setCurrentIndex(1)
+
     def _refresh_patient(self) -> None:
         display_name = self.patient.th_name
         if self.patient.en_name and self.patient.en_name != "-":
@@ -742,11 +782,54 @@ class CareKeeperWindow(QMainWindow):
             Qt.AlignCenter,
         )
         subtitle.setWordWrap(True)
+        self.scan_title = title
+        self.scan_subtitle = subtitle
 
         self.btn_card = QPushButton("อ่านข้อมูลบัตร")
         self.btn_card.setObjectName("BtnScanCard")
         self.btn_card.setFixedHeight(62)
         self.btn_card.clicked.connect(self._read_card)
+
+        self.btn_manual_card = QPushButton("กรณีอ่านไม่สำเร็จ กรุณากรอกเลขบัตรเอง")
+        self.btn_manual_card.setObjectName("BtnManualCard")
+        self.btn_manual_card.setFixedHeight(38)
+        self.btn_manual_card.clicked.connect(self._show_manual_cid_entry)
+
+        self.manual_cid_panel = QFrame()
+        self.manual_cid_panel.setObjectName("ManualCidPanel")
+        manual_layout = QVBoxLayout(self.manual_cid_panel)
+        manual_layout.setContentsMargins(0, 0, 0, 0)
+        manual_layout.setSpacing(12)
+        manual_title = self._console_label(
+            "กรุณากรอกเลขบัตรประจำตัวประชาชน 13 หลัก",
+            "ManualCidTitle",
+            Qt.AlignCenter,
+        )
+        self.txt_manual_cid = QLineEdit()
+        self.txt_manual_cid.setObjectName("ManualCidInput")
+        self.txt_manual_cid.setMaxLength(13)
+        self.txt_manual_cid.setAlignment(Qt.AlignCenter)
+        self.txt_manual_cid.setPlaceholderText("0 0000 00000 00")
+        self.txt_manual_cid.returnPressed.connect(self._submit_manual_cid)
+        self.btn_confirm_manual_cid = QPushButton("ยืนยันข้อมูล")
+        self.btn_confirm_manual_cid.setObjectName("BtnConfirmManualCid")
+        self.btn_confirm_manual_cid.setFixedSize(210, 44)
+        self.btn_confirm_manual_cid.clicked.connect(self._submit_manual_cid)
+        self.btn_cancel_manual_cid = QPushButton("ย้อนกลับ")
+        self.btn_cancel_manual_cid.setObjectName("BtnCancelManualCid")
+        self.btn_cancel_manual_cid.setFixedSize(150, 44)
+        self.btn_cancel_manual_cid.clicked.connect(self._hide_manual_cid_entry)
+        manual_actions = QHBoxLayout()
+        manual_actions.setContentsMargins(0, 0, 0, 0)
+        manual_actions.setSpacing(12)
+        manual_actions.addStretch(1)
+        manual_actions.addWidget(self.btn_cancel_manual_cid)
+        manual_actions.addWidget(self.btn_confirm_manual_cid)
+        manual_actions.addStretch(1)
+        manual_layout.addWidget(manual_title)
+        manual_layout.addWidget(self.txt_manual_cid)
+        manual_layout.addLayout(manual_actions)
+        self.manual_cid_panel.hide()
 
         self.lbl_scan_message = self._console_label("SYSTEM: พร้อมอ่านข้อมูลบัตร", "SystemMessageNeutral", Qt.AlignCenter)
         self.lbl_scan_message.setWordWrap(True)
@@ -756,6 +839,8 @@ class CareKeeperWindow(QMainWindow):
         card_layout.addWidget(subtitle)
         card_layout.addSpacing(18)
         card_layout.addWidget(self.btn_card)
+        card_layout.addWidget(self.btn_manual_card)
+        card_layout.addWidget(self.manual_cid_panel)
         card_layout.addWidget(self.lbl_scan_message)
         card_layout.addStretch(1)
 
@@ -1097,6 +1182,7 @@ class CareKeeperWindow(QMainWindow):
     def _on_patient_failed(self, message: str) -> None:
         self.btn_card.setText("อ่านข้อมูลบัตร")
         self.btn_card.setEnabled(True)
+        self._show_manual_cid_entry()
         self._set_system_message(f"อ่านบัตรไม่สำเร็จ: {message}", success=False)
         self._show_popup(f"อ่านบัตรไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
@@ -1176,6 +1262,13 @@ class CareKeeperWindow(QMainWindow):
         self.btn_temp.setText("เริ่มวัดค่า\nTEMP")
         self.btn_finish.setEnabled(True)
         self.btn_finish.setText("บันทึกข้อมูล  >")
+        if hasattr(self, "manual_cid_panel"):
+            self.manual_cid_panel.hide()
+            self.btn_manual_card.show()
+            self.btn_card.show()
+            self.scan_title.show()
+            self.scan_subtitle.show()
+            self.txt_manual_cid.clear()
         self._refresh_patient()
         self._refresh_values()
         self._set_system_message("พร้อมอ่านข้อมูลบัตร", success=None)
