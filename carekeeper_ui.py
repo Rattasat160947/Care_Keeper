@@ -690,18 +690,26 @@ class CareKeeperWindow(QMainWindow):
     def _metric_row(self, name: str, value_label: QLabel, unit: str, value_color_name: str) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
+        row.setSpacing(0)
+
         lbl_name = self._console_label(name, "MetricName")
         lbl_name.setFixedWidth(54)
-        unit_label = self._console_label(unit, "MetricUnit")
-        unit_label.setFixedWidth(58)
+        lbl_name.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
         value_label.setObjectName(value_color_name)
-        value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        value_label.setFixedWidth(210)
+        value_label.setAlignment(Qt.AlignCenter)
+        value_label.setFixedWidth(240)
+
+        unit_label = self._console_label(unit, "MetricUnit")
+        unit_label.setFixedWidth(80)
+        unit_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
         row.addWidget(lbl_name)
-        row.addWidget(value_label)
-        row.addWidget(unit_label)
         row.addStretch(1)
+        row.addWidget(value_label)
+        row.addSpacing(24)
+        row.addWidget(unit_label)
+
         return row
 
     def _build_scan_page(self) -> None:
@@ -785,16 +793,22 @@ class CareKeeperWindow(QMainWindow):
         nibp = QFrame()
         nibp.setObjectName("NibpSection")
         nibp_layout = QVBoxLayout(nibp)
-        nibp_layout.setContentsMargins(28, 10, 26, 8)
-        nibp_layout.setSpacing(4)
+        nibp_layout.setContentsMargins(28, 10, 26, 4)
+        nibp_layout.setSpacing(0)
+
         nibp_layout.addWidget(self._console_label("NIBP", "SectionTitleYellow"))
+        nibp_layout.addSpacing(6)
+
         self.lbl_sys_value = self._console_label("--", "ValueYellow")
         self.lbl_dia_value = self._console_label("--", "ValueYellow")
         self.lbl_pulse_value = self._console_label("--", "ValueYellowSmall")
-        nibp_layout.addLayout(self._metric_row("SYS", self.lbl_sys_value, "mmHg", "ValueYellow"))
-        nibp_layout.addLayout(self._metric_row("DIA", self.lbl_dia_value, "mmHg", "ValueYellow"))
-        nibp_layout.addLayout(self._metric_row("PUL", self.lbl_pulse_value, "bpm", "ValueYellowSmall"))
+
+        nibp_layout.addLayout(self._metric_row("SYS", self.lbl_sys_value, "mmHg", "ValueYellow"), 10)
+        nibp_layout.addLayout(self._metric_row("DIA", self.lbl_dia_value, "mmHg", "ValueYellow"), 10)
+        nibp_layout.addLayout(self._metric_row("PUL", self.lbl_pulse_value, "bpm", "ValueYellowSmall"), 10)
+
         nibp_layout.addStretch(1)
+
         measure_layout.addWidget(nibp, 5)
 
         right = QFrame()
