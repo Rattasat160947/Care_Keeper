@@ -720,7 +720,7 @@ class CareKeeperWindow(QMainWindow):
         outer.setSpacing(12)
 
         top = QHBoxLayout()
-        brand = self._console_label("carekeeper", "ScanBrand")
+        brand = self._console_label("HealthLink", "ScanBrand")
         top.addWidget(brand)
         top.addStretch()
         top.addWidget(self._status_cluster(welcome=True))
@@ -737,7 +737,7 @@ class CareKeeperWindow(QMainWindow):
 
         title = self._console_label("สแกนบัตรประชาชน", "ScanTitle", Qt.AlignCenter)
         subtitle = self._console_label(
-            "วางบัตรประชาชนบนเครื่องอ่านบัตรเพื่อเริ่มการตรวจ",
+            "เสียบบัตรประชาชนบนเครื่องอ่านบัตรเพื่อเริ่มการตรวจ",
             "ScanSubtitle",
             Qt.AlignCenter,
         )
@@ -783,7 +783,7 @@ class CareKeeperWindow(QMainWindow):
         measure_layout.setContentsMargins(0, 0, 0, 0)
         measure_layout.setSpacing(0)
 
-        self.btn_bp = QPushButton("START\nNIBP")
+        self.btn_bp = QPushButton("เริ่มวัดค่า\nNIBP")
         self.btn_bp.setObjectName("BtnNIBP")
         self.btn_bp.setFixedWidth(112)
         self.btn_bp.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
@@ -838,7 +838,7 @@ class CareKeeperWindow(QMainWindow):
         spo2_box.addLayout(spo2_value_row)
         spo2_box.addStretch(1)
         spo2_layout.addLayout(spo2_box, 1)
-        self.btn_spo2 = QPushButton("START\nSPO2")
+        self.btn_spo2 = QPushButton("เริ่มวัดค่า\nSPO2")
         self.btn_spo2.setObjectName("BtnSpO2Console")
         self.btn_spo2.setFixedWidth(112)
         self.btn_spo2.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
@@ -867,7 +867,7 @@ class CareKeeperWindow(QMainWindow):
         temp_box.addLayout(temp_value_row)
         temp_box.addStretch(1)
         temp_layout.addLayout(temp_box, 1)
-        self.btn_temp = QPushButton("START\nTEMP")
+        self.btn_temp = QPushButton("เริ่มวัดค่า\nTEMP")
         self.btn_temp.setObjectName("BtnTempConsole")
         self.btn_temp.setFixedWidth(112)
         self.btn_temp.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
@@ -1103,7 +1103,7 @@ class CareKeeperWindow(QMainWindow):
     def _measure_bp(self) -> None:
         if self.bp_cooldown_seconds > 0:
             return
-        self.btn_bp.setText("MEASURE.\nNIBP")
+        self.btn_bp.setText("กำลังวัดค่า \nNIBP")
         self.btn_bp.setEnabled(False)
         self._set_system_message("กำลังวัดความดันโลหิต", success=None)
         self._start_task(self.provider.measure_blood_pressure, self._on_bp_done, self._on_bp_failed)
@@ -1115,18 +1115,18 @@ class CareKeeperWindow(QMainWindow):
             self.vitals.pulse = result.pulse
         self.bp_cooldown_seconds = 60
         self.cooldown_timer.start(1000)
-        self.btn_bp.setText(f"WAIT\n{self.bp_cooldown_seconds}s")
+        self.btn_bp.setText(f"รอ\n{self.bp_cooldown_seconds}s")
         self._set_system_message("วัดความดันโลหิตสำเร็จ", success=True)
         self._refresh_values()
 
     def _on_bp_failed(self, message: str) -> None:
         self.btn_bp.setEnabled(True)
-        self.btn_bp.setText("START\nNIBP")
+        self.btn_bp.setText("เริ่มวัดค่า\nNIBP")
         self._set_system_message(f"วัดความดันไม่สำเร็จ: {message}", success=False)
         self._show_popup(f"วัดความดันไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_spo2(self) -> None:
-        self.btn_spo2.setText("MEASURE.\nSpO2")
+        self.btn_spo2.setText("กำลังวัดค่า\nSPO2")
         self.btn_spo2.setEnabled(False)
         self._set_system_message("กำลังวัดออกซิเจนในเลือด", success=None)
         self._start_task(self.provider.measure_spo2, self._on_spo2_done, self._on_spo2_failed)
@@ -1134,18 +1134,18 @@ class CareKeeperWindow(QMainWindow):
     def _on_spo2_done(self, result: object) -> None:
         self.vitals.spo2 = int(result)
         self.btn_spo2.setEnabled(True)
-        self.btn_spo2.setText("START\nSpO2")
+        self.btn_spo2.setText("เริ่มวัดค่า\nSPO2")
         self._set_system_message("วัดออกซิเจนในเลือดสำเร็จ", success=True)
         self._refresh_values()
 
     def _on_spo2_failed(self, message: str) -> None:
         self.btn_spo2.setEnabled(True)
-        self.btn_spo2.setText("START\nSpO2")
+        self.btn_spo2.setText("เริ่มวัดค่า\nSPO2")
         self._set_system_message(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False)
         self._show_popup(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_temperature(self) -> None:
-        self.btn_temp.setText("MEASURE.\nTEMP")
+        self.btn_temp.setText("กำลังวัดค่า\nTEMP")
         self.btn_temp.setEnabled(False)
         self._set_system_message("กำลังวัดอุณหภูมิร่างกาย", success=None)
         self._start_task(self.provider.measure_temperature, self._on_temperature_done, self._on_temperature_failed)
@@ -1153,13 +1153,13 @@ class CareKeeperWindow(QMainWindow):
     def _on_temperature_done(self, result: object) -> None:
         self.vitals.temperature = float(result)
         self.btn_temp.setEnabled(True)
-        self.btn_temp.setText("START\nTEMP")
+        self.btn_temp.setText("เริ่มวัดค่า\nTEMP")
         self._set_system_message("วัดอุณหภูมิร่างกายสำเร็จ", success=True)
         self._refresh_values()
 
     def _on_temperature_failed(self, message: str) -> None:
         self.btn_temp.setEnabled(True)
-        self.btn_temp.setText("START\nTEMP")
+        self.btn_temp.setText("เริ่มวัดค่า\nTEMP")
         self._set_system_message(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False)
         self._show_popup(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
@@ -1169,11 +1169,11 @@ class CareKeeperWindow(QMainWindow):
         self.bp_cooldown_seconds = 0
         self.cooldown_timer.stop()
         self.btn_bp.setEnabled(True)
-        self.btn_bp.setText("START\nNIBP")
+        self.btn_bp.setText("เริ่มวัดค่า\nNIBP")
         self.btn_spo2.setEnabled(True)
-        self.btn_spo2.setText("START\nSpO2")
+        self.btn_spo2.setText("เริ่มวัดค่า\nSPO2")
         self.btn_temp.setEnabled(True)
-        self.btn_temp.setText("START\nTEMP")
+        self.btn_temp.setText("เริ่มวัดค่า\nTEMP")
         self.btn_finish.setEnabled(True)
         self.btn_finish.setText("บันทึกข้อมูล  >")
         self._refresh_patient()
@@ -1184,11 +1184,11 @@ class CareKeeperWindow(QMainWindow):
     def _bp_cooldown_tick(self) -> None:
         if self.bp_cooldown_seconds > 0:
             self.bp_cooldown_seconds -= 1
-            self.btn_bp.setText(f"WAIT\n{self.bp_cooldown_seconds}s")
+            self.btn_bp.setText(f"รอ\n{self.bp_cooldown_seconds}s")
             return
         self.cooldown_timer.stop()
         self.btn_bp.setEnabled(True)
-        self.btn_bp.setText("START\nNIBP")
+        self.btn_bp.setText("เริ่มวัดค่า\nNIBP")
 
     def _submit_data(self) -> None:
         payload = {
