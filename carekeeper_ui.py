@@ -38,12 +38,24 @@ WINDOW_HEIGHT = 503
 PROJECT_DIR = Path(__file__).resolve().parent
 STYLE_DIR = PROJECT_DIR / "style"
 APP_FONT_FAMILY = "Noto Sans Thai"
+NUMBER_FONT_FAMILY = "Asimov-MwEn"
 ICON_BLOOD_PRESSURE = "heart-pulse-svgrepo-com.svg"
 ICON_SPO2 = "rain-drops-svgrepo-com.svg"
 ICON_TEMPERATURE = "thermometer-5-svgrepo-com.svg"
 
 def _style_asset(name: str) -> Path:
     return STYLE_DIR / name
+
+def _load_font_family(font_path: Path, fallback: str) -> str:
+    if not font_path.exists():
+        return fallback
+
+    font_id = QFontDatabase.addApplicationFont(str(font_path))
+    if font_id == -1:
+        return fallback
+
+    families = QFontDatabase.applicationFontFamilies(font_id)
+    return families[0] if families else fallback
 
 def _load_app_font(app: QApplication) -> str:
     family = APP_FONT_FAMILY
@@ -66,6 +78,9 @@ def _load_app_font(app: QApplication) -> str:
 
     app.setFont(QFont(family, 12))
     return family
+
+def _load_number_font() -> str:
+    return _load_font_family(STYLE_DIR / "Asimov-MwEn.otf", NUMBER_FONT_FAMILY)
 
 @dataclass
 class VitalState:
@@ -608,7 +623,7 @@ class CareKeeperWindow(QMainWindow):
 
         battery_card = QFrame()
         battery_card.setObjectName("BatteryPill")
-        battery_card.setFixedSize(110, 56)
+        battery_card.setFixedSize(124, 56)
         battery_layout = QHBoxLayout(battery_card)
         battery_layout.setContentsMargins(10, 4, 10, 4)
         battery_layout.setSpacing(6)
@@ -681,9 +696,12 @@ class CareKeeperWindow(QMainWindow):
         unit_label = self._console_label(unit, "MetricUnit")
         unit_label.setFixedWidth(58)
         value_label.setObjectName(value_color_name)
+        value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        value_label.setFixedWidth(210)
         row.addWidget(lbl_name)
-        row.addWidget(value_label, 1)
+        row.addWidget(value_label)
         row.addWidget(unit_label)
+        row.addStretch(1)
         return row
 
     def _build_scan_page(self) -> None:
@@ -767,8 +785,8 @@ class CareKeeperWindow(QMainWindow):
         nibp = QFrame()
         nibp.setObjectName("NibpSection")
         nibp_layout = QVBoxLayout(nibp)
-        nibp_layout.setContentsMargins(28, 18, 26, 18)
-        nibp_layout.setSpacing(8)
+        nibp_layout.setContentsMargins(28, 10, 26, 8)
+        nibp_layout.setSpacing(4)
         nibp_layout.addWidget(self._console_label("NIBP", "SectionTitleYellow"))
         self.lbl_sys_value = self._console_label("--", "ValueYellow")
         self.lbl_dia_value = self._console_label("--", "ValueYellow")
@@ -776,6 +794,7 @@ class CareKeeperWindow(QMainWindow):
         nibp_layout.addLayout(self._metric_row("SYS", self.lbl_sys_value, "mmHg", "ValueYellow"))
         nibp_layout.addLayout(self._metric_row("DIA", self.lbl_dia_value, "mmHg", "ValueYellow"))
         nibp_layout.addLayout(self._metric_row("PUL", self.lbl_pulse_value, "bpm", "ValueYellowSmall"))
+        nibp_layout.addStretch(1)
         measure_layout.addWidget(nibp, 5)
 
         right = QFrame()
@@ -787,20 +806,25 @@ class CareKeeperWindow(QMainWindow):
         spo2_row = QFrame()
         spo2_row.setObjectName("RightMetricRow")
         spo2_layout = QHBoxLayout(spo2_row)
-        spo2_layout.setContentsMargins(22, 0, 0, 0)
+        spo2_layout.setContentsMargins(22, 10, 0, 0)
         spo2_layout.setSpacing(0)
         spo2_box = QVBoxLayout()
-        spo2_box.setSpacing(2)
+        spo2_box.setSpacing(4)
         spo2_box.addWidget(self._console_label("SPO2", "SectionTitleBlue"))
         spo2_value_row = QHBoxLayout()
         spo2_value_row.setSpacing(14)
         self.lbl_spo2_value = self._console_label("--", "ValueBlue")
+        self.lbl_spo2_value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.lbl_spo2_value.setFixedWidth(176)
+        spo2_unit = self._console_label("%", "MetricUnitLarge")
+        spo2_unit.setFixedWidth(56)
         spo2_value_row.addWidget(self.lbl_spo2_value)
-        spo2_value_row.addWidget(self._console_label("%", "MetricUnitLarge"))
+        spo2_value_row.addWidget(spo2_unit)
         spo2_value_row.addStretch()
         spo2_box.addLayout(spo2_value_row)
+        spo2_box.addStretch(1)
         spo2_layout.addLayout(spo2_box, 1)
-        self.btn_spo2 = QPushButton("START\nSpO2")
+        self.btn_spo2 = QPushButton("START\nSPO2")
         self.btn_spo2.setObjectName("BtnSpO2Console")
         self.btn_spo2.setFixedWidth(112)
         self.btn_spo2.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
@@ -811,18 +835,23 @@ class CareKeeperWindow(QMainWindow):
         temp_row = QFrame()
         temp_row.setObjectName("RightMetricRow")
         temp_layout = QHBoxLayout(temp_row)
-        temp_layout.setContentsMargins(22, 0, 0, 0)
+        temp_layout.setContentsMargins(22, 10, 0, 0)
         temp_layout.setSpacing(0)
         temp_box = QVBoxLayout()
-        temp_box.setSpacing(2)
+        temp_box.setSpacing(4)
         temp_box.addWidget(self._console_label("TEMP", "SectionTitleGreen"))
         temp_value_row = QHBoxLayout()
         temp_value_row.setSpacing(10)
         self.lbl_temp_value = self._console_label("--", "ValueGreen")
+        self.lbl_temp_value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.lbl_temp_value.setFixedWidth(176)
+        temp_unit = self._console_label("°C", "MetricUnitLarge")
+        temp_unit.setFixedWidth(62)
         temp_value_row.addWidget(self.lbl_temp_value)
-        temp_value_row.addWidget(self._console_label("°C", "MetricUnitLarge"))
+        temp_value_row.addWidget(temp_unit)
         temp_value_row.addStretch()
         temp_box.addLayout(temp_value_row)
+        temp_box.addStretch(1)
         temp_layout.addLayout(temp_box, 1)
         self.btn_temp = QPushButton("START\nTEMP")
         self.btn_temp.setObjectName("BtnTempConsole")
@@ -887,10 +916,12 @@ class CareKeeperWindow(QMainWindow):
         grid.setHorizontalSpacing(26)
         grid.setVerticalSpacing(20)
 
-        self.sum_bp_value = self._console_label("--/--", "SummaryValueYellow", Qt.AlignCenter)
-        self.sum_pulse_value = self._console_label("--", "SummaryValueYellow", Qt.AlignCenter)
-        self.sum_spo2_value = self._console_label("--", "SummaryValueBlue", Qt.AlignCenter)
-        self.sum_temp_value = self._console_label("--", "SummaryValueGreen", Qt.AlignCenter)
+        self.sum_bp_value = self._console_label("--/--", "SummaryValueYellow", Qt.AlignRight | Qt.AlignVCenter)
+        self.sum_pulse_value = self._console_label("--", "SummaryValueYellow", Qt.AlignRight | Qt.AlignVCenter)
+        self.sum_spo2_value = self._console_label("--", "SummaryValueBlue", Qt.AlignRight | Qt.AlignVCenter)
+        self.sum_temp_value = self._console_label("--", "SummaryValueGreen", Qt.AlignRight | Qt.AlignVCenter)
+        for value_label in (self.sum_bp_value, self.sum_pulse_value, self.sum_spo2_value, self.sum_temp_value):
+            value_label.setFixedWidth(190)
 
         rows = [
             ("ความดันโลหิต Blood Pressure", self.sum_bp_value, "mmHg"),
@@ -1058,7 +1089,7 @@ class CareKeeperWindow(QMainWindow):
     def _measure_bp(self) -> None:
         if self.bp_cooldown_seconds > 0:
             return
-        self.btn_bp.setText("MEASURING\nNIBP")
+        self.btn_bp.setText("MEASURE.\nNIBP")
         self.btn_bp.setEnabled(False)
         self._set_system_message("กำลังวัดความดันโลหิต", success=None)
         self._start_task(self.provider.measure_blood_pressure, self._on_bp_done, self._on_bp_failed)
@@ -1081,7 +1112,7 @@ class CareKeeperWindow(QMainWindow):
         self._show_popup(f"วัดความดันไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_spo2(self) -> None:
-        self.btn_spo2.setText("MEASURING\nSpO2")
+        self.btn_spo2.setText("MEASURE.\nSpO2")
         self.btn_spo2.setEnabled(False)
         self._set_system_message("กำลังวัดออกซิเจนในเลือด", success=None)
         self._start_task(self.provider.measure_spo2, self._on_spo2_done, self._on_spo2_failed)
@@ -1100,7 +1131,7 @@ class CareKeeperWindow(QMainWindow):
         self._show_popup(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_temperature(self) -> None:
-        self.btn_temp.setText("MEASURING\nTEMP")
+        self.btn_temp.setText("MEASURE.\nTEMP")
         self.btn_temp.setEnabled(False)
         self._set_system_message("กำลังวัดอุณหภูมิร่างกาย", success=None)
         self._start_task(self.provider.measure_temperature, self._on_temperature_done, self._on_temperature_failed)
@@ -1179,13 +1210,14 @@ class CareKeeperWindow(QMainWindow):
         self._show_popup(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False, duration_ms=3000)
 
     def _apply_styles(self) -> None:
-        self.setStyleSheet(build_stylesheet(APP_FONT_FAMILY))
+        self.setStyleSheet(build_stylesheet(APP_FONT_FAMILY, NUMBER_FONT_FAMILY))
 
 def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
-    global APP_FONT_FAMILY
+    global APP_FONT_FAMILY, NUMBER_FONT_FAMILY
 
     app = QApplication(sys.argv)
     APP_FONT_FAMILY = _load_app_font(app)
+    NUMBER_FONT_FAMILY = _load_number_font()
     window = CareKeeperWindow(provider, mode_name=mode_name)
     window.showFullScreen()
     sys.exit(app.exec())

@@ -23,7 +23,7 @@ QFrame#StatusPill, QFrame#BatteryPill {
     border: 1px solid #1f2937;
     border-radius: 14px;
 }
-QLabel#ConsoleBatteryLabel { font-size: 14px; font-weight: 900; color: #ffffff; }
+QLabel#ConsoleBatteryLabel { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 14px; font-weight: 900; color: #ffffff; }
 
 QLabel#ScanBrand { font-size: 28px; font-weight: 900; color: #9aff2d; letter-spacing: 0.5px; }
 QFrame#ScanPanel {
@@ -63,10 +63,10 @@ QLabel#SectionTitleGreen { font-size: 16px; font-weight: 900; color: #16c75a; }
 QLabel#MetricName { font-size: 15px; font-weight: 900; color: #d1d5db; }
 QLabel#MetricUnit { font-size: 14px; font-weight: 900; color: #e5e7eb; }
 QLabel#MetricUnitLarge { font-size: 26px; font-weight: 900; color: #f8fafc; padding-top: 22px; }
-QLabel#ValueYellow { font-size: 74px; font-weight: 900; color: #fff11a; }
-QLabel#ValueYellowSmall { font-size: 58px; font-weight: 900; color: #fff11a; }
-QLabel#ValueBlue { font-size: 88px; font-weight: 900; color: #79f1ff; }
-QLabel#ValueGreen { font-size: 88px; font-weight: 900; color: #19c464; }
+QLabel#ValueYellow { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 74px; font-weight: 900; color: #fff11a; }
+QLabel#ValueYellowSmall { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 58px; font-weight: 900; color: #fff11a; }
+QLabel#ValueBlue { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 88px; font-weight: 900; color: #79f1ff; }
+QLabel#ValueGreen { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 88px; font-weight: 900; color: #19c464; }
 
 QPushButton#BtnNIBP {
     background: #fff200;
@@ -139,11 +139,16 @@ QFrame#SummaryTable {
 }
 QLabel#SummaryName { font-size: 18px; font-weight: 900; color: #f8fafc; }
 QLabel#SummaryUnit { font-size: 18px; font-weight: 900; color: #f8fafc; }
-QLabel#SummaryValueYellow { font-size: 42px; font-weight: 900; color: #fff11a; }
-QLabel#SummaryValueBlue { font-size: 42px; font-weight: 900; color: #79f1ff; }
-QLabel#SummaryValueGreen { font-size: 42px; font-weight: 900; color: #19c464; }
+QLabel#SummaryValueYellow { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 42px; font-weight: 900; color: #fff11a; }
+QLabel#SummaryValueBlue { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 42px; font-weight: 900; color: #79f1ff; }
+QLabel#SummaryValueGreen { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 42px; font-weight: 900; color: #19c464; }
 """
 
 
-def build_stylesheet(font_family: str) -> str:
-    return CONSOLE_STYLESHEET.replace("__APP_FONT__", font_family)
+def build_stylesheet(font_family: str, number_font_family: str | None = None) -> str:
+    number_font = number_font_family or font_family
+    return (
+        CONSOLE_STYLESHEET
+        .replace("__APP_FONT__", font_family)
+        .replace("__NUMBER_FONT__", number_font)
+    )
