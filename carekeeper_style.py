@@ -334,15 +334,26 @@ QFrame#HistoryPanel {
     border: 1px solid #334155;
     border-radius: 12px;
 }
+QScrollArea#HistoryScroll {
+    background: transparent;
+    border: none;
+}
+QWidget#HistoryBody {
+    background: transparent;
+}
 QLabel#HistoryTitle {
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 900;
     color: #79f1ff;
 }
 QLabel#HistoryRow {
-    font-size: 13px;
-    font-weight: 800;
-    color: #e5e7eb;
+    background: #071016;
+    border: 1px solid #1f3a46;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 15px;
+    font-weight: 900;
+    color: #f8fafc;
 }
 
 QPushButton#BtnSummarySmall {

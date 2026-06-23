@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -777,7 +778,7 @@ class CareKeeperWindow(QMainWindow):
             (self.sum_lbl_name, self.sum_lbl_cid, self.sum_lbl_dob, self.sum_lbl_address),
         ):
             name.setText(display_name)
-            cid.setText(self._format_cid(self.patient.cid))
+            cid.setText(f"| {self._format_cid(self.patient.cid)}")
             dob.setText(f"เกิด: {self.patient.birth_date}")
             address.setText(self.patient.address)
 
@@ -860,10 +861,7 @@ class CareKeeperWindow(QMainWindow):
 
         self.btn_card = QPushButton("อ่านข้อมูลบัตร")
         self.btn_card.setObjectName("BtnScanCard")
-        self.btn_card.setFixedSize(360, 56)
-        self.btn_card.setMinimumWidth(0)
-        self.btn_card.setMaximumWidth(16777215)
-        self.btn_card.setFixedHeight(62)
+        self.btn_card.setFixedSize(760, 62)
         self.btn_card.clicked.connect(self._read_card)
 
         self.btn_manual_card = QPushButton("กรณีอ่านไม่สำเร็จ กรุณากรอกเลขบัตรเอง")
@@ -889,6 +887,7 @@ class CareKeeperWindow(QMainWindow):
         self.txt_manual_cid.setMaxLength(17)
         self.txt_manual_cid.setAlignment(Qt.AlignCenter)
         self.txt_manual_cid.setPlaceholderText("0-0000-00000-00-0")
+        self.txt_manual_cid.setFixedWidth(520)
         self.txt_manual_cid.textChanged.connect(self._format_manual_cid_input)
         self.txt_manual_cid.returnPressed.connect(self._submit_manual_cid)
         self.btn_confirm_manual_cid = QPushButton("ยืนยันข้อมูล")
@@ -907,7 +906,7 @@ class CareKeeperWindow(QMainWindow):
         manual_actions.addWidget(self.btn_confirm_manual_cid)
         manual_actions.addStretch(1)
         manual_layout.addWidget(manual_title)
-        manual_layout.addWidget(self.txt_manual_cid)
+        manual_layout.addWidget(self.txt_manual_cid, alignment=Qt.AlignCenter)
         manual_layout.addLayout(manual_actions)
         self.manual_cid_panel.hide()
 
@@ -918,8 +917,8 @@ class CareKeeperWindow(QMainWindow):
         card_layout.addWidget(title)
         card_layout.addWidget(subtitle)
         card_layout.addSpacing(18)
-        card_layout.addWidget(self.btn_card)
-        card_layout.addWidget(self.btn_manual_card)
+        card_layout.addWidget(self.btn_card, alignment=Qt.AlignCenter)
+        card_layout.addWidget(self.btn_manual_card, alignment=Qt.AlignCenter)
         card_layout.addWidget(self.manual_cid_panel)
         card_layout.addWidget(self.lbl_scan_message)
         card_layout.addStretch(1)
@@ -1135,13 +1134,23 @@ class CareKeeperWindow(QMainWindow):
         self.history_panel.setObjectName("HistoryPanel")
         history_layout = QVBoxLayout(self.history_panel)
         history_layout.setContentsMargins(14, 8, 14, 8)
-        history_layout.setSpacing(4)
+        history_layout.setSpacing(8)
         history_layout.addWidget(self._console_label("ข้อมูลย้อนหลัง", "HistoryTitle"))
+
+        self.history_scroll = QScrollArea()
+        self.history_scroll.setObjectName("HistoryScroll")
+        self.history_scroll.setWidgetResizable(True)
+        self.history_scroll.setFrameShape(QFrame.NoFrame)
+        history_body = QWidget()
+        history_body.setObjectName("HistoryBody")
+        self.history_rows_layout = QVBoxLayout(history_body)
+        self.history_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self.history_rows_layout.setSpacing(8)
         self.history_rows: list[QLabel] = []
         for _ in range(4):
-            row_label = self._console_label("-", "HistoryRow")
-            self.history_rows.append(row_label)
-            history_layout.addWidget(row_label)
+            self._append_history_row()
+        self.history_scroll.setWidget(history_body)
+        history_layout.addWidget(self.history_scroll, 1)
         self.history_panel.hide()
         panel_layout.addWidget(self.history_panel)
 
@@ -1254,23 +1263,42 @@ class CareKeeperWindow(QMainWindow):
             self._on_history_failed,
         )
 
+    def _append_history_row(self) -> QLabel:
+        row_label = self._console_label("-", "HistoryRow")
+        row_label.setWordWrap(True)
+        row_label.setMinimumHeight(58)
+        self.history_rows.append(row_label)
+        self.history_rows_layout.addWidget(row_label)
+        return row_label
+
+    @staticmethod
+    def _format_history_record(record: MeasurementHistoryRecord, index: int) -> str:
+        return (
+            f"รายการที่ {index + 1} | วันที่/เวลา: {record.measured_at}\n"
+            f"ความดันโลหิต {record.systolic}/{record.diastolic} mmHg   "
+            f"ชีพจร {record.pulse} bpm   "
+            f"ออกซิเจนในเลือด {record.spo2}%   "
+            f"อุณหภูมิ {record.temperature:.1f}°C"
+        )
+
     def _on_history_done(self, result: object) -> None:
         records = result if isinstance(result, list) else []
         if not records:
-            for label in self.history_rows:
-                label.setText("-")
+            for label in self.history_rows[1:]:
+                label.hide()
             self.history_rows[0].setText("ยังไม่มีข้อมูลย้อนหลังสำหรับผู้รับบริการนี้")
+            self.history_rows[0].show()
         else:
+            while len(self.history_rows) < len(records):
+                self._append_history_row()
             for index, label in enumerate(self.history_rows):
                 if index >= len(records):
-                    label.setText("-")
+                    label.hide()
                     continue
                 record = records[index]
                 if isinstance(record, MeasurementHistoryRecord):
-                    label.setText(
-                        f"{record.measured_at}: BP {record.systolic}/{record.diastolic} mmHg | "
-                        f"Pulse {record.pulse} bpm | SpO2 {record.spo2}% | Temp {record.temperature:.1f}°C"
-                    )
+                    label.setText(self._format_history_record(record, index))
+                    label.show()
 
         self.summary_table.hide()
         self.history_panel.show()
@@ -1281,8 +1309,9 @@ class CareKeeperWindow(QMainWindow):
         self.history_panel.show()
         self.summary_table.hide()
         self.history_rows[0].setText(f"โหลดข้อมูลย้อนหลังไม่สำเร็จ: {message}")
+        self.history_rows[0].show()
         for label in self.history_rows[1:]:
-            label.setText("-")
+            label.hide()
         self.btn_history.setEnabled(True)
         self.btn_history.setText("สรุปผลการวัด")
 

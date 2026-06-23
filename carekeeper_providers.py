@@ -168,10 +168,10 @@ class MockCareKeeperProvider(CareKeeperProvider):
 
     def get_measurement_history(self, patient_id: str) -> list[MeasurementHistoryRecord]:
         return [
-            MeasurementHistoryRecord("ล่าสุด", 117, 81, 87, 99, 36.3),
-            MeasurementHistoryRecord("ครั้งที่ 2", 121, 79, 82, 98, 36.5),
-            MeasurementHistoryRecord("ครั้งที่ 3", 114, 76, 78, 99, 36.4),
-            MeasurementHistoryRecord("ครั้งที่ 4", 126, 84, 90, 97, 36.7),
+            MeasurementHistoryRecord("23 มิ.ย. 2569 10:30", 117, 81, 87, 99, 36.3),
+            MeasurementHistoryRecord("22 มิ.ย. 2569 15:10", 121, 79, 82, 98, 36.5),
+            MeasurementHistoryRecord("21 มิ.ย. 2569 09:45", 114, 76, 78, 99, 36.4),
+            MeasurementHistoryRecord("19 มิ.ย. 2569 14:20", 126, 84, 90, 97, 36.7),
         ]
     
     def send_data(self, payload: dict) -> bool:
