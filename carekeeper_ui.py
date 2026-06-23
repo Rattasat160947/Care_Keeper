@@ -602,7 +602,7 @@ class CareKeeperWindow(QMainWindow):
         if hasattr(self, "history_panel"):
             self.history_panel.hide()
             self.summary_table.show()
-            self.btn_history.setText("ดูย้อนหลัง")
+            self.btn_history.setText("ดูข้อมูลย้อนหลัง")
         self.stack.setCurrentIndex(2)
 
     @staticmethod
@@ -742,7 +742,7 @@ class CareKeeperWindow(QMainWindow):
         self.btn_card.show()
         self.scan_title.show()
         self.scan_subtitle.show()
-        self.scan_icon_frame.show()
+        self.scan_icon_frame.hide()
         self._set_system_message("พร้อมอ่านข้อมูลบัตร", success=None)
 
     def _submit_manual_cid(self) -> None:
@@ -831,8 +831,8 @@ class CareKeeperWindow(QMainWindow):
 
         card = QFrame()
         card.setObjectName("ScanPanel")
-        card.setMinimumWidth(560)
-        card.setMaximumWidth(650)
+        card.setMinimumWidth(0)
+        card.setMaximumWidth(16777215)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(58, 34, 58, 34)
         card_layout.setSpacing(18)
@@ -856,15 +856,21 @@ class CareKeeperWindow(QMainWindow):
         scan_icon.setAlignment(Qt.AlignCenter)
         scan_icon.setPixmap(_tinted_icon("id-card-svgrepo-com.svg", 54))
         scan_icon_layout.addWidget(scan_icon, alignment=Qt.AlignCenter)
+        self.scan_icon_frame.hide()
 
         self.btn_card = QPushButton("อ่านข้อมูลบัตร")
         self.btn_card.setObjectName("BtnScanCard")
         self.btn_card.setFixedSize(360, 56)
+        self.btn_card.setMinimumWidth(0)
+        self.btn_card.setMaximumWidth(16777215)
+        self.btn_card.setFixedHeight(62)
         self.btn_card.clicked.connect(self._read_card)
 
         self.btn_manual_card = QPushButton("กรณีอ่านไม่สำเร็จ กรุณากรอกเลขบัตรเอง")
         self.btn_manual_card.setObjectName("BtnManualCard")
         self.btn_manual_card.setFixedWidth(430)
+        self.btn_manual_card.setMinimumWidth(0)
+        self.btn_manual_card.setMaximumWidth(16777215)
         self.btn_manual_card.setFixedHeight(38)
         self.btn_manual_card.clicked.connect(self._show_manual_cid_entry)
 
@@ -911,15 +917,14 @@ class CareKeeperWindow(QMainWindow):
         card_layout.addStretch(1)
         card_layout.addWidget(title)
         card_layout.addWidget(subtitle)
-        card_layout.addWidget(self.scan_icon_frame, alignment=Qt.AlignCenter)
         card_layout.addSpacing(18)
-        card_layout.addWidget(self.btn_card, alignment=Qt.AlignCenter)
-        card_layout.addWidget(self.btn_manual_card, alignment=Qt.AlignCenter)
+        card_layout.addWidget(self.btn_card)
+        card_layout.addWidget(self.btn_manual_card)
         card_layout.addWidget(self.manual_cid_panel)
         card_layout.addWidget(self.lbl_scan_message)
         card_layout.addStretch(1)
 
-        outer.addWidget(card, 1, alignment=Qt.AlignCenter)
+        outer.addWidget(card, 1)
         self.stack.addWidget(root)
 
     def _build_dashboard_page(self) -> None:
@@ -961,11 +966,11 @@ class CareKeeperWindow(QMainWindow):
 
         self.lbl_sys_value = self._console_label("--", "ValueYellow")
         self.lbl_dia_value = self._console_label("--", "ValueYellow")
-        self.lbl_pulse_value = self._console_label("--", "ValueYellowSmall")
+        self.lbl_pulse_value = self._console_label("--", "ValuePulsePink")
 
         nibp_layout.addLayout(self._metric_row("SYS", self.lbl_sys_value, "mmHg", "ValueYellow"), 10)
         nibp_layout.addLayout(self._metric_row("DIA", self.lbl_dia_value, "mmHg", "ValueYellow"), 10)
-        nibp_layout.addLayout(self._metric_row("PUL", self.lbl_pulse_value, "bpm", "ValueYellowSmall"), 10)
+        nibp_layout.addLayout(self._metric_row("PUL", self.lbl_pulse_value, "bpm", "ValuePulsePink"), 10)
 
         nibp_layout.addStretch(1)
 
@@ -1078,7 +1083,7 @@ class CareKeeperWindow(QMainWindow):
         top.addWidget(self._console_label("ข้อมูลผลการวัด (Measurement Summary)", "SummaryTitle"))
         top.addStretch()
         btn_remeasure = QPushButton("เริ่มวัดอีกครั้ง")
-        self.btn_history = QPushButton("ดูย้อนหลัง")
+        self.btn_history = QPushButton("ดูข้อมูลย้อนหลัง")
         self.btn_history.setObjectName("BtnSummarySmall")
         self.btn_history.setFixedSize(160, 42)
         self.btn_history.clicked.connect(self._request_history)
@@ -1098,7 +1103,7 @@ class CareKeeperWindow(QMainWindow):
         grid.setVerticalSpacing(20)
 
         self.sum_bp_value = self._console_label("--/--", "SummaryValueYellow", Qt.AlignRight | Qt.AlignVCenter)
-        self.sum_pulse_value = self._console_label("--", "SummaryValueYellow", Qt.AlignRight | Qt.AlignVCenter)
+        self.sum_pulse_value = self._console_label("--", "SummaryValuePulsePink", Qt.AlignRight | Qt.AlignVCenter)
         self.sum_spo2_value = self._console_label("--", "SummaryValueBlue", Qt.AlignRight | Qt.AlignVCenter)
         self.sum_temp_value = self._console_label("--", "SummaryValueGreen", Qt.AlignRight | Qt.AlignVCenter)
         for value_label in (self.sum_bp_value, self.sum_pulse_value, self.sum_spo2_value, self.sum_temp_value):
@@ -1238,7 +1243,7 @@ class CareKeeperWindow(QMainWindow):
         if self.history_panel.isVisible():
             self.history_panel.hide()
             self.summary_table.show()
-            self.btn_history.setText("ดูย้อนหลัง")
+            self.btn_history.setText("ดูข้อมูลย้อนหลัง")
             return
 
         self.btn_history.setEnabled(False)
@@ -1270,7 +1275,7 @@ class CareKeeperWindow(QMainWindow):
         self.summary_table.hide()
         self.history_panel.show()
         self.btn_history.setEnabled(True)
-        self.btn_history.setText("ซ่อนย้อนหลัง")
+        self.btn_history.setText("สรุปผลการวัด")
 
     def _on_history_failed(self, message: str) -> None:
         self.history_panel.show()
@@ -1279,7 +1284,7 @@ class CareKeeperWindow(QMainWindow):
         for label in self.history_rows[1:]:
             label.setText("-")
         self.btn_history.setEnabled(True)
-        self.btn_history.setText("ซ่อนย้อนหลัง")
+        self.btn_history.setText("สรุปผลการวัด")
 
     def _refresh_values(self) -> None:
         sys_text = self._format_int(self.vitals.systolic)
@@ -1464,7 +1469,7 @@ class CareKeeperWindow(QMainWindow):
             self.btn_card.show()
             self.scan_title.show()
             self.scan_subtitle.show()
-            self.scan_icon_frame.show()
+            self.scan_icon_frame.hide()
             self.txt_manual_cid.clear()
         self._refresh_patient()
         self._refresh_values()

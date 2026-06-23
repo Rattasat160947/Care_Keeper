@@ -223,48 +223,76 @@ QPushButton#BtnScanCard {
     border-radius: 18px;
 }
 
-QLabel#SectionTitleYellow { color: #FD3A9E; }
-QLabel#ValueYellow, QLabel#ValueYellowSmall {
+QLabel#SectionTitleYellow { color: #ffed00; }
+QLabel#ValueYellow {
     font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
+    color: #fff11a;
+}
+QLabel#ValueYellowSmall, QLabel#ValuePulsePink {
+    font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
+    font-size: 74px;
+    font-weight: 900;
     color: #FD3A9E;
 }
 QLabel#SummaryValueYellow {
     font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
+    color: #fff11a;
+}
+QLabel#SummaryValuePulsePink {
+    font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
+    font-size: 42px;
+    font-weight: 900;
     color: #FD3A9E;
 }
 
 QPushButton#BtnNIBP {
-    background: #FD3A9E;
+    background: #fff200;
     color: #050505;
     border-radius: 18px;
 }
-QPushButton#BtnNIBPBusy, QPushButton#BtnSpO2Busy, QPushButton#BtnTempBusy {
-    background: #475569;
-    color: #e5e7eb;
+QPushButton#BtnNIBPBusy {
+    background: #9f9700;
+    color: #050505;
+    border: none;
+    border-radius: 18px;
+    font-size: 19px;
+    font-weight: 900;
+}
+QPushButton#BtnSpO2Busy {
+    background: #2d9baa;
+    color: #050505;
+    border: none;
+    border-radius: 18px;
+    font-size: 19px;
+    font-weight: 900;
+}
+QPushButton#BtnTempBusy {
+    background: #128342;
+    color: #050505;
     border: none;
     border-radius: 18px;
     font-size: 19px;
     font-weight: 900;
 }
 QPushButton#BtnNIBPDone {
-    background: #7f2d55;
-    color: #f8d9e7;
+    background: #c8bd12;
+    color: #050505;
     border: none;
     border-radius: 18px;
     font-size: 19px;
     font-weight: 900;
 }
 QPushButton#BtnSpO2Done {
-    background: #155e75;
-    color: #cffafe;
+    background: #50c7d6;
+    color: #050505;
     border: none;
     border-radius: 18px;
     font-size: 19px;
     font-weight: 900;
 }
 QPushButton#BtnTempDone {
-    background: #166534;
-    color: #dcfce7;
+    background: #14a855;
+    color: #050505;
     border: none;
     border-radius: 18px;
     font-size: 19px;
@@ -277,6 +305,18 @@ QPushButton#BtnNIBPFail, QPushButton#BtnSpO2Fail, QPushButton#BtnTempFail {
     border-radius: 18px;
     font-size: 18px;
     font-weight: 900;
+}
+QPushButton#BtnNIBPBusy:disabled {
+    background: #9f9700;
+    color: #050505;
+}
+QPushButton#BtnSpO2Busy:disabled {
+    background: #2d9baa;
+    color: #050505;
+}
+QPushButton#BtnTempBusy:disabled {
+    background: #128342;
+    color: #050505;
 }
 QPushButton#BtnSpO2Console, QPushButton#BtnTempConsole {
     border-radius: 18px;
