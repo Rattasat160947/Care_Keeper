@@ -72,6 +72,16 @@ class DeviceStatus:
     bluetooth_connected: bool = False
 
 
+@dataclass
+class MeasurementHistoryRecord:
+    measured_at: str
+    systolic: int
+    diastolic: int
+    pulse: int
+    spo2: int
+    temperature: float
+
+
 class CareKeeperProvider:
     """Interface for all data sources used by the GUI."""
 
@@ -89,6 +99,9 @@ class CareKeeperProvider:
 
     def get_device_status(self) -> DeviceStatus:
         raise NotImplementedError
+
+    def get_measurement_history(self, patient_id: str) -> list[MeasurementHistoryRecord]:
+        return []
     
     def send_data(self, payload: dict) -> bool:
         raise NotImplementedError
@@ -152,6 +165,14 @@ class MockCareKeeperProvider(CareKeeperProvider):
             wifi_connected=True,
             bluetooth_connected=True,
         )
+
+    def get_measurement_history(self, patient_id: str) -> list[MeasurementHistoryRecord]:
+        return [
+            MeasurementHistoryRecord("ล่าสุด", 117, 81, 87, 99, 36.3),
+            MeasurementHistoryRecord("ครั้งที่ 2", 121, 79, 82, 98, 36.5),
+            MeasurementHistoryRecord("ครั้งที่ 3", 114, 76, 78, 99, 36.4),
+            MeasurementHistoryRecord("ครั้งที่ 4", 126, 84, 90, 97, 36.7),
+        ]
     
     def send_data(self, payload: dict) -> bool:
         time.sleep(3.0)
@@ -268,6 +289,10 @@ class RealCareKeeperProvider(CareKeeperProvider):
             wifi_connected=self._is_wifi_connected(),
             bluetooth_connected=self._is_bluetooth_connected(),
         )
+
+    def get_measurement_history(self, patient_id: str) -> list[MeasurementHistoryRecord]:
+        # TODO: replace this with the real cloud GET endpoint when the backend is ready.
+        return []
 
     def _read_battery_percent(self) -> int:
         try:

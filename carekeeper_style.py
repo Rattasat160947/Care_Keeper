@@ -193,6 +193,185 @@ QLabel#SummaryUnit { font-size: 18px; font-weight: 900; color: #f8fafc; }
 QLabel#SummaryValueYellow { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 42px; font-weight: 900; color: #fff11a; }
 QLabel#SummaryValueBlue { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 42px; font-weight: 900; color: #79f1ff; }
 QLabel#SummaryValueGreen { font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif; font-size: 42px; font-weight: 900; color: #19c464; }
+
+QFrame#ConsoleHeader {
+    border-radius: 12px;
+}
+QLabel#HeaderNameConsole { font-size: 22px; font-weight: 900; color: #ffffff; }
+QLabel#HeaderCidConsole { font-size: 18px; font-weight: 900; color: #79f1ff; }
+QLabel#HeaderSubConsole { font-size: 16px; font-weight: 900; color: #f8fafc; }
+
+QFrame#StatusPill, QFrame#BatteryPill {
+    border-radius: 18px;
+}
+QLabel#StatusText {
+    font-size: 10px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+QFrame#ScanPanel {
+    border: 2px solid #334155;
+    border-radius: 18px;
+}
+QFrame#ScanIconFrame {
+    background: transparent;
+    border: 4px solid #ffffff;
+    border-radius: 10px;
+}
+QPushButton#BtnScanCard {
+    border-radius: 18px;
+}
+
+QLabel#SectionTitleYellow { color: #FD3A9E; }
+QLabel#ValueYellow, QLabel#ValueYellowSmall {
+    font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
+    color: #FD3A9E;
+}
+QLabel#SummaryValueYellow {
+    font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
+    color: #FD3A9E;
+}
+
+QPushButton#BtnNIBP {
+    background: #FD3A9E;
+    color: #050505;
+    border-radius: 18px;
+}
+QPushButton#BtnNIBPBusy, QPushButton#BtnSpO2Busy, QPushButton#BtnTempBusy {
+    background: #475569;
+    color: #e5e7eb;
+    border: none;
+    border-radius: 18px;
+    font-size: 19px;
+    font-weight: 900;
+}
+QPushButton#BtnNIBPDone {
+    background: #7f2d55;
+    color: #f8d9e7;
+    border: none;
+    border-radius: 18px;
+    font-size: 19px;
+    font-weight: 900;
+}
+QPushButton#BtnSpO2Done {
+    background: #155e75;
+    color: #cffafe;
+    border: none;
+    border-radius: 18px;
+    font-size: 19px;
+    font-weight: 900;
+}
+QPushButton#BtnTempDone {
+    background: #166534;
+    color: #dcfce7;
+    border: none;
+    border-radius: 18px;
+    font-size: 19px;
+    font-weight: 900;
+}
+QPushButton#BtnNIBPFail, QPushButton#BtnSpO2Fail, QPushButton#BtnTempFail {
+    background: #dc2626;
+    color: #ffffff;
+    border: none;
+    border-radius: 18px;
+    font-size: 18px;
+    font-weight: 900;
+}
+QPushButton#BtnSpO2Console, QPushButton#BtnTempConsole {
+    border-radius: 18px;
+}
+QPushButton#BtnSummaryReady, QPushButton#BtnSummaryDisabled {
+    border-radius: 22px;
+    font-size: 18px;
+}
+QPushButton#BtnSummarySmall, QPushButton#BtnFinish, QPushButton#BtnBack {
+    border-radius: 18px;
+}
+
+QFrame#HistoryPanel {
+    background: #050709;
+    border: 1px solid #334155;
+    border-radius: 12px;
+}
+QLabel#HistoryTitle {
+    font-size: 15px;
+    font-weight: 900;
+    color: #79f1ff;
+}
+QLabel#HistoryRow {
+    font-size: 13px;
+    font-weight: 800;
+    color: #e5e7eb;
+}
+
+QPushButton#BtnSummarySmall {
+    background: #0b7cff;
+    color: #ffffff;
+    border: 1px solid #38bdf8;
+    border-radius: 21px;
+    font-size: 16px;
+    font-weight: 900;
+    padding: 0px 18px;
+}
+QPushButton#BtnSummarySmall:hover {
+    background: #2490ff;
+}
+
+QPushButton#BtnNIBP,
+QPushButton#BtnSpO2Console,
+QPushButton#BtnTempConsole,
+QPushButton#BtnNIBPBusy,
+QPushButton#BtnSpO2Busy,
+QPushButton#BtnTempBusy,
+QPushButton#BtnNIBPDone,
+QPushButton#BtnSpO2Done,
+QPushButton#BtnTempDone,
+QPushButton#BtnNIBPFail,
+QPushButton#BtnSpO2Fail,
+QPushButton#BtnTempFail {
+    border-radius: 0px;
+    border: 2px solid transparent;
+    margin: 0px;
+    font-size: 19px;
+    font-weight: 900;
+}
+QPushButton#BtnNIBP:disabled,
+QPushButton#BtnSpO2Console:disabled,
+QPushButton#BtnTempConsole:disabled,
+QPushButton#BtnNIBPBusy:disabled,
+QPushButton#BtnSpO2Busy:disabled,
+QPushButton#BtnTempBusy:disabled,
+QPushButton#BtnNIBPDone:disabled,
+QPushButton#BtnSpO2Done:disabled,
+QPushButton#BtnTempDone:disabled,
+QPushButton#BtnNIBPFail:disabled,
+QPushButton#BtnSpO2Fail:disabled,
+QPushButton#BtnTempFail:disabled {
+    border-radius: 0px;
+    border: 2px solid transparent;
+    margin: 0px;
+}
+
+QFrame#ConsoleFooter {
+    min-height: 72px;
+}
+QPushButton#BtnSummaryReady,
+QPushButton#BtnSummaryDisabled {
+    font-size: 19px;
+    font-weight: 900;
+    border-radius: 24px;
+}
+QPushButton#BtnFinish {
+    font-size: 18px;
+    font-weight: 900;
+    border-radius: 24px;
+}
+QPushButton#BtnBack {
+    font-size: 16px;
+    font-weight: 900;
+    border-radius: 24px;
+}
 """
 
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QRectF, QThread, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QBrush
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QBrush, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -30,6 +30,7 @@ from carekeeper_providers import (
     BloodPressureReading,
     CareKeeperProvider,
     DeviceStatus,
+    MeasurementHistoryRecord,
     PatientInfo,
 )
 
@@ -82,6 +83,22 @@ def _load_app_font(app: QApplication) -> str:
 def _load_number_font() -> str:
     return _load_font_family(STYLE_DIR / "Asimov-MwEn.otf", NUMBER_FONT_FAMILY)
 
+def _tinted_icon(name: str, size: int, color: str = "#ffffff") -> QPixmap:
+    source = QPixmap(str(_style_asset(name)))
+    if source.isNull():
+        return source
+
+    icon = source.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    tinted = QPixmap(icon.size())
+    tinted.fill(Qt.transparent)
+
+    painter = QPainter(tinted)
+    painter.drawPixmap(0, 0, icon)
+    painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+    painter.fillRect(tinted.rect(), QColor(color))
+    painter.end()
+    return tinted
+
 @dataclass
 class VitalState:
     systolic: int | None = None
@@ -109,7 +126,7 @@ class WifiIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.connected = False
-        self.scale = 2.2  
+        self.scale = 1.35
         self.setFixedSize(int(26 * self.scale), int(20 * self.scale))
         self.setCursor(Qt.PointingHandCursor)
 
@@ -146,7 +163,7 @@ class BluetoothIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.connected = False
-        self.scale = 2.2  
+        self.scale = 1.45
         self.setFixedSize(int(20 * self.scale), int(20 * self.scale))
         self.setCursor(Qt.PointingHandCursor)
 
@@ -175,7 +192,7 @@ class BatteryIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.percent = 0
-        self.scale = 1.5  
+        self.scale = 1.15
         self.setFixedSize(int(30 * self.scale), int(15 * self.scale))
 
     def set_percent(self, percent: int) -> None:
@@ -582,13 +599,44 @@ class CareKeeperWindow(QMainWindow):
 
     def _show_summary(self) -> None:
         self._refresh_values()
+        if hasattr(self, "history_panel"):
+            self.history_panel.hide()
+            self.summary_table.show()
+            self.btn_history.setText("ดูย้อนหลัง")
         self.stack.setCurrentIndex(2)
 
     @staticmethod
     def _format_int(value: int | None) -> str:
         return "--" if value is None else str(value)
 
-    
+    @staticmethod
+    def _format_cid(value: str) -> str:
+        digits = "".join(ch for ch in value if ch.isdigit())
+        if len(digits) == 13:
+            return f"{digits[0]}-{digits[1:5]}-{digits[5:10]}-{digits[10:12]}-{digits[12]}"
+        return value
+
+    def _format_manual_cid_input(self, text: str) -> None:
+        if getattr(self, "_formatting_manual_cid", False):
+            return
+
+        digits = "".join(ch for ch in text if ch.isdigit())[:13]
+        parts = [digits[:1], digits[1:5], digits[5:10], digits[10:12], digits[12:13]]
+        formatted = "-".join(part for part in parts if part)
+        if formatted == text:
+            return
+
+        self._formatting_manual_cid = True
+        self.txt_manual_cid.setText(formatted)
+        self.txt_manual_cid.setCursorPosition(len(formatted))
+        self._formatting_manual_cid = False
+
+    def _set_measure_button(self, button: QPushButton, object_name: str, text: str, enabled: bool = True) -> None:
+        button.setObjectName(object_name)
+        button.setText(text)
+        button.setEnabled(enabled)
+        button.style().unpolish(button)
+        button.style().polish(button)
 
     # Redesign override methods for the dark medical-console UI.
     def _status_cluster(self, welcome: bool = False) -> QFrame:
@@ -603,27 +651,35 @@ class CareKeeperWindow(QMainWindow):
         battery = BatteryIndicator()
         battery_text = QLabel("0%")
         battery_text.setObjectName("ConsoleBatteryLabel")
+        bt_text = QLabel("OFF")
+        bt_text.setObjectName("StatusText")
+        wifi_text = QLabel("OFF")
+        wifi_text.setObjectName("StatusText")
 
         wifi.clicked.connect(self._open_wifi_selector)
         bt.clicked.connect(self._open_bluetooth_selector)
 
         bt_card = QFrame()
         bt_card.setObjectName("StatusPill")
-        bt_card.setFixedSize(68, 56)
+        bt_card.setFixedSize(116, 42)
         bt_layout = QHBoxLayout(bt_card)
-        bt_layout.setContentsMargins(10, 4, 10, 4)
+        bt_layout.setContentsMargins(8, 4, 10, 4)
+        bt_layout.setSpacing(4)
         bt_layout.addWidget(bt, alignment=Qt.AlignCenter)
+        bt_layout.addWidget(bt_text, alignment=Qt.AlignCenter)
 
         wifi_card = QFrame()
         wifi_card.setObjectName("StatusPill")
-        wifi_card.setFixedSize(80, 56)
+        wifi_card.setFixedSize(92, 42)
         wifi_layout = QHBoxLayout(wifi_card)
-        wifi_layout.setContentsMargins(10, 4, 10, 4)
+        wifi_layout.setContentsMargins(8, 4, 10, 4)
+        wifi_layout.setSpacing(4)
         wifi_layout.addWidget(wifi, alignment=Qt.AlignCenter)
+        wifi_layout.addWidget(wifi_text, alignment=Qt.AlignCenter)
 
         battery_card = QFrame()
         battery_card.setObjectName("BatteryPill")
-        battery_card.setFixedSize(124, 56)
+        battery_card.setFixedSize(100, 42)
         battery_layout = QHBoxLayout(battery_card)
         battery_layout.setContentsMargins(10, 4, 10, 4)
         battery_layout.setSpacing(6)
@@ -636,7 +692,7 @@ class CareKeeperWindow(QMainWindow):
 
         if not hasattr(self, "_status_widgets"):
             self._status_widgets = []
-        self._status_widgets.append((bt, wifi, battery, battery_text))
+        self._status_widgets.append((bt, wifi, battery, battery_text, bt_text, wifi_text))
 
         if welcome:
             self.bt_ind_welcome = bt
@@ -655,11 +711,13 @@ class CareKeeperWindow(QMainWindow):
         if not isinstance(result, DeviceStatus):
             return
 
-        for bt, wifi, battery, battery_text in getattr(self, "_status_widgets", []):
+        for bt, wifi, battery, battery_text, bt_text, wifi_text in getattr(self, "_status_widgets", []):
             battery_text.setText(f"{result.battery_percent}%")
             battery.set_percent(result.battery_percent)
             wifi.set_connected(result.wifi_connected)
             bt.set_connected(result.bluetooth_connected)
+            bt_text.setText("CONNECTED" if result.bluetooth_connected else "OFF")
+            wifi_text.setText("ON" if result.wifi_connected else "OFF")
 
     def _read_card(self) -> None:
         self.btn_card.setText("กำลังอ่านข้อมูลบัตร...")
@@ -670,6 +728,7 @@ class CareKeeperWindow(QMainWindow):
     def _show_manual_cid_entry(self) -> None:
         self.scan_title.hide()
         self.scan_subtitle.hide()
+        self.scan_icon_frame.hide()
         self.btn_card.hide()
         self.manual_cid_panel.show()
         self.btn_manual_card.hide()
@@ -683,6 +742,7 @@ class CareKeeperWindow(QMainWindow):
         self.btn_card.show()
         self.scan_title.show()
         self.scan_subtitle.show()
+        self.scan_icon_frame.show()
         self._set_system_message("พร้อมอ่านข้อมูลบัตร", success=None)
 
     def _submit_manual_cid(self) -> None:
@@ -717,7 +777,7 @@ class CareKeeperWindow(QMainWindow):
             (self.sum_lbl_name, self.sum_lbl_cid, self.sum_lbl_dob, self.sum_lbl_address),
         ):
             name.setText(display_name)
-            cid.setText(self.patient.cid)
+            cid.setText(self._format_cid(self.patient.cid))
             dob.setText(f"เกิด: {self.patient.birth_date}")
             address.setText(self.patient.address)
 
@@ -771,6 +831,8 @@ class CareKeeperWindow(QMainWindow):
 
         card = QFrame()
         card.setObjectName("ScanPanel")
+        card.setMinimumWidth(560)
+        card.setMaximumWidth(650)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(58, 34, 58, 34)
         card_layout.setSpacing(18)
@@ -785,13 +847,24 @@ class CareKeeperWindow(QMainWindow):
         self.scan_title = title
         self.scan_subtitle = subtitle
 
+        self.scan_icon_frame = QFrame()
+        self.scan_icon_frame.setObjectName("ScanIconFrame")
+        self.scan_icon_frame.setFixedSize(96, 78)
+        scan_icon_layout = QVBoxLayout(self.scan_icon_frame)
+        scan_icon_layout.setContentsMargins(0, 0, 0, 0)
+        scan_icon = QLabel()
+        scan_icon.setAlignment(Qt.AlignCenter)
+        scan_icon.setPixmap(_tinted_icon("id-card-svgrepo-com.svg", 54))
+        scan_icon_layout.addWidget(scan_icon, alignment=Qt.AlignCenter)
+
         self.btn_card = QPushButton("อ่านข้อมูลบัตร")
         self.btn_card.setObjectName("BtnScanCard")
-        self.btn_card.setFixedHeight(62)
+        self.btn_card.setFixedSize(360, 56)
         self.btn_card.clicked.connect(self._read_card)
 
         self.btn_manual_card = QPushButton("กรณีอ่านไม่สำเร็จ กรุณากรอกเลขบัตรเอง")
         self.btn_manual_card.setObjectName("BtnManualCard")
+        self.btn_manual_card.setFixedWidth(430)
         self.btn_manual_card.setFixedHeight(38)
         self.btn_manual_card.clicked.connect(self._show_manual_cid_entry)
 
@@ -807,9 +880,10 @@ class CareKeeperWindow(QMainWindow):
         )
         self.txt_manual_cid = QLineEdit()
         self.txt_manual_cid.setObjectName("ManualCidInput")
-        self.txt_manual_cid.setMaxLength(13)
+        self.txt_manual_cid.setMaxLength(17)
         self.txt_manual_cid.setAlignment(Qt.AlignCenter)
-        self.txt_manual_cid.setPlaceholderText("0 0000 00000 00")
+        self.txt_manual_cid.setPlaceholderText("0-0000-00000-00-0")
+        self.txt_manual_cid.textChanged.connect(self._format_manual_cid_input)
         self.txt_manual_cid.returnPressed.connect(self._submit_manual_cid)
         self.btn_confirm_manual_cid = QPushButton("ยืนยันข้อมูล")
         self.btn_confirm_manual_cid.setObjectName("BtnConfirmManualCid")
@@ -837,14 +911,15 @@ class CareKeeperWindow(QMainWindow):
         card_layout.addStretch(1)
         card_layout.addWidget(title)
         card_layout.addWidget(subtitle)
+        card_layout.addWidget(self.scan_icon_frame, alignment=Qt.AlignCenter)
         card_layout.addSpacing(18)
-        card_layout.addWidget(self.btn_card)
-        card_layout.addWidget(self.btn_manual_card)
+        card_layout.addWidget(self.btn_card, alignment=Qt.AlignCenter)
+        card_layout.addWidget(self.btn_manual_card, alignment=Qt.AlignCenter)
         card_layout.addWidget(self.manual_cid_panel)
         card_layout.addWidget(self.lbl_scan_message)
         card_layout.addStretch(1)
 
-        outer.addWidget(card, 1)
+        outer.addWidget(card, 1, alignment=Qt.AlignCenter)
         self.stack.addWidget(root)
 
     def _build_dashboard_page(self) -> None:
@@ -965,16 +1040,17 @@ class CareKeeperWindow(QMainWindow):
 
         footer = QFrame()
         footer.setObjectName("ConsoleFooter")
+        footer.setMinimumHeight(72)
         footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(16, 8, 14, 8)
-        footer_layout.setSpacing(12)
+        footer_layout.setContentsMargins(20, 10, 18, 10)
+        footer_layout.setSpacing(16)
         self.lbl_system_message = self._console_label("SYSTEM: รอคำสั่งวัดค่า", "SystemMessageNeutral")
         self.lbl_measure_count = self._console_label("วัดค่าสำเร็จแล้ว 0 รายการ", "FooterHint")
         footer_layout.addWidget(self.lbl_system_message, 2)
         footer_layout.addWidget(self.lbl_measure_count, 1)
         self.btn_summary = QPushButton("สรุปผลการวัด  >")
         self.btn_summary.setObjectName("BtnSummaryDisabled")
-        self.btn_summary.setFixedSize(230, 40)
+        self.btn_summary.setFixedSize(320, 54)
         self.btn_summary.setEnabled(False)
         self.btn_summary.clicked.connect(self._show_summary)
         footer_layout.addWidget(self.btn_summary)
@@ -1002,14 +1078,20 @@ class CareKeeperWindow(QMainWindow):
         top.addWidget(self._console_label("ข้อมูลผลการวัด (Measurement Summary)", "SummaryTitle"))
         top.addStretch()
         btn_remeasure = QPushButton("เริ่มวัดอีกครั้ง")
+        self.btn_history = QPushButton("ดูย้อนหลัง")
+        self.btn_history.setObjectName("BtnSummarySmall")
+        self.btn_history.setFixedSize(160, 42)
+        self.btn_history.clicked.connect(self._request_history)
+        top.addWidget(self.btn_history)
         btn_remeasure.setObjectName("BtnSummarySmall")
-        btn_remeasure.setFixedSize(170, 34)
+        btn_remeasure.setFixedSize(190, 42)
         btn_remeasure.clicked.connect(lambda: self.stack.setCurrentIndex(1))
         top.addWidget(btn_remeasure)
         panel_layout.addLayout(top)
 
         table = QFrame()
         table.setObjectName("SummaryTable")
+        self.summary_table = table
         grid = QGridLayout(table)
         grid.setContentsMargins(46, 16, 46, 16)
         grid.setHorizontalSpacing(26)
@@ -1028,6 +1110,12 @@ class CareKeeperWindow(QMainWindow):
             ("ออกซิเจนในเลือด Oxygen Saturation", self.sum_spo2_value, "%"),
             ("อุณหภูมิร่างกาย Body Temperature", self.sum_temp_value, "°C"),
         ]
+        rows = [
+            ("ความดันโลหิต (BP)", self.sum_bp_value, "mmHg"),
+            ("อัตราการเต้นของหัวใจ (Pulse)", self.sum_pulse_value, "bpm"),
+            ("ออกซิเจนในเลือด (SpO2)", self.sum_spo2_value, "%"),
+            ("อุณหภูมิร่างกาย (Temp)", self.sum_temp_value, "°C"),
+        ]
         for row_index, (name, value, unit) in enumerate(rows):
             grid.addWidget(self._console_label(name, "SummaryName"), row_index, 0)
             grid.addWidget(value, row_index, 1)
@@ -1038,19 +1126,35 @@ class CareKeeperWindow(QMainWindow):
         grid.setColumnStretch(2, 2)
         panel_layout.addWidget(table, 1)
 
+        self.history_panel = QFrame()
+        self.history_panel.setObjectName("HistoryPanel")
+        history_layout = QVBoxLayout(self.history_panel)
+        history_layout.setContentsMargins(14, 8, 14, 8)
+        history_layout.setSpacing(4)
+        history_layout.addWidget(self._console_label("ข้อมูลย้อนหลัง", "HistoryTitle"))
+        self.history_rows: list[QLabel] = []
+        for _ in range(4):
+            row_label = self._console_label("-", "HistoryRow")
+            self.history_rows.append(row_label)
+            history_layout.addWidget(row_label)
+        self.history_panel.hide()
+        panel_layout.addWidget(self.history_panel)
+
         self.lbl_summary_system_message = self._console_label("SYSTEM: ตรวจสอบข้อมูลก่อนบันทึก", "SystemMessageNeutral")
         panel_layout.addWidget(self.lbl_summary_system_message)
 
         footer = QHBoxLayout()
+        footer.setContentsMargins(0, 8, 0, 0)
+        footer.setSpacing(18)
         self.btn_back_home = QPushButton("ย้อนกลับหน้าแรก")
         self.btn_back_home.setObjectName("BtnBack")
-        self.btn_back_home.setFixedSize(170, 40)
+        self.btn_back_home.setFixedSize(210, 50)
         self.btn_back_home.clicked.connect(self._reset_session)
         footer.addWidget(self.btn_back_home)
         footer.addStretch()
         self.btn_finish = QPushButton("บันทึกข้อมูล  >")
         self.btn_finish.setObjectName("BtnFinish")
-        self.btn_finish.setFixedSize(260, 42)
+        self.btn_finish.setFixedSize(320, 54)
         self.btn_finish.clicked.connect(self._submit_data)
         footer.addWidget(self.btn_finish)
         panel_layout.addLayout(footer)
@@ -1061,12 +1165,13 @@ class CareKeeperWindow(QMainWindow):
     def _build_patient_header(self, summary: bool) -> QFrame:
         header = QFrame()
         header.setObjectName("ConsoleHeader")
+        header.setMinimumHeight(82)
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(14, 8, 14, 8)
+        layout.setContentsMargins(18, 10, 14, 10)
         layout.setSpacing(12)
 
         info = QVBoxLayout()
-        info.setSpacing(2)
+        info.setSpacing(4)
         row1 = QHBoxLayout()
         row1.setSpacing(10)
         lbl_name = self._console_label("-", "HeaderNameConsole")
@@ -1129,6 +1234,53 @@ class CareKeeperWindow(QMainWindow):
             label.style().unpolish(label)
             label.style().polish(label)
 
+    def _request_history(self) -> None:
+        if self.history_panel.isVisible():
+            self.history_panel.hide()
+            self.summary_table.show()
+            self.btn_history.setText("ดูย้อนหลัง")
+            return
+
+        self.btn_history.setEnabled(False)
+        self.btn_history.setText("กำลังโหลด...")
+        self._start_task(
+            lambda: self.provider.get_measurement_history(self.patient.cid),
+            self._on_history_done,
+            self._on_history_failed,
+        )
+
+    def _on_history_done(self, result: object) -> None:
+        records = result if isinstance(result, list) else []
+        if not records:
+            for label in self.history_rows:
+                label.setText("-")
+            self.history_rows[0].setText("ยังไม่มีข้อมูลย้อนหลังสำหรับผู้รับบริการนี้")
+        else:
+            for index, label in enumerate(self.history_rows):
+                if index >= len(records):
+                    label.setText("-")
+                    continue
+                record = records[index]
+                if isinstance(record, MeasurementHistoryRecord):
+                    label.setText(
+                        f"{record.measured_at}: BP {record.systolic}/{record.diastolic} mmHg | "
+                        f"Pulse {record.pulse} bpm | SpO2 {record.spo2}% | Temp {record.temperature:.1f}°C"
+                    )
+
+        self.summary_table.hide()
+        self.history_panel.show()
+        self.btn_history.setEnabled(True)
+        self.btn_history.setText("ซ่อนย้อนหลัง")
+
+    def _on_history_failed(self, message: str) -> None:
+        self.history_panel.show()
+        self.summary_table.hide()
+        self.history_rows[0].setText(f"โหลดข้อมูลย้อนหลังไม่สำเร็จ: {message}")
+        for label in self.history_rows[1:]:
+            label.setText("-")
+        self.btn_history.setEnabled(True)
+        self.btn_history.setText("ซ่อนย้อนหลัง")
+
     def _refresh_values(self) -> None:
         sys_text = self._format_int(self.vitals.systolic)
         dia_text = self._format_int(self.vitals.diastolic)
@@ -1189,6 +1341,10 @@ class CareKeeperWindow(QMainWindow):
     def _measure_bp(self) -> None:
         if self.bp_cooldown_seconds > 0:
             return
+        self._set_measure_button(self.btn_bp, "BtnNIBPBusy", "กำลังวัด\nความดัน", False)
+        self._set_system_message("กำลังวัดความดันโลหิต", success=None)
+        self._start_task(self.provider.measure_blood_pressure, self._on_bp_done, self._on_bp_failed)
+        return
         self.btn_bp.setText("กำลังวัดค่า \nความดัน")
         self.btn_bp.setEnabled(False)
         self._set_system_message("กำลังวัดความดันโลหิต", success=None)
@@ -1201,17 +1357,34 @@ class CareKeeperWindow(QMainWindow):
             self.vitals.pulse = result.pulse
         self.bp_cooldown_seconds = 60
         self.cooldown_timer.start(1000)
+        self._set_measure_button(self.btn_bp, "BtnNIBPBusy", f"รอ\n{self.bp_cooldown_seconds} วินาที", False)
+        self._set_system_message("วัดความดันโลหิตสำเร็จ", success=True)
+        self._refresh_values()
+        return
+        if isinstance(result, BloodPressureReading):
+            self.vitals.systolic = result.systolic
+            self.vitals.diastolic = result.diastolic
+            self.vitals.pulse = result.pulse
+        self.bp_cooldown_seconds = 60
+        self.cooldown_timer.start(1000)
         self.btn_bp.setText(f"รอ\n{self.bp_cooldown_seconds} \nวินาที")
         self._set_system_message("วัดความดันโลหิตสำเร็จ", success=True)
         self._refresh_values()
 
     def _on_bp_failed(self, message: str) -> None:
+        self._set_measure_button(self.btn_bp, "BtnNIBPFail", "วัดไม่สำเร็จ\nความดัน", True)
+        self._set_system_message(f"วัดความดันไม่สำเร็จ: {message}", success=False)
+        return
         self.btn_bp.setEnabled(True)
         self.btn_bp.setText("เริ่มวัดค่า\nความดัน")
         self._set_system_message(f"วัดความดันไม่สำเร็จ: {message}", success=False)
         self._show_popup(f"วัดความดันไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_spo2(self) -> None:
+        self._set_measure_button(self.btn_spo2, "BtnSpO2Busy", "กำลังวัด\nออกซิเจน", False)
+        self._set_system_message("กำลังวัดออกซิเจนในเลือด", success=None)
+        self._start_task(self.provider.measure_spo2, self._on_spo2_done, self._on_spo2_failed)
+        return
         self.btn_spo2.setText("กำลังวัดค่า\nออกซิเจน")
         self.btn_spo2.setEnabled(False)
         self._set_system_message("กำลังวัดออกซิเจนในเลือด", success=None)
@@ -1219,18 +1392,30 @@ class CareKeeperWindow(QMainWindow):
 
     def _on_spo2_done(self, result: object) -> None:
         self.vitals.spo2 = int(result)
+        self._set_measure_button(self.btn_spo2, "BtnSpO2Done", "วัดแล้ว\nออกซิเจน", True)
+        self._set_system_message("วัดออกซิเจนในเลือดสำเร็จ", success=True)
+        self._refresh_values()
+        return
+        self.vitals.spo2 = int(result)
         self.btn_spo2.setEnabled(True)
         self.btn_spo2.setText("เริ่มวัดค่า\nออกซิเจน")
         self._set_system_message("วัดออกซิเจนในเลือดสำเร็จ", success=True)
         self._refresh_values()
 
     def _on_spo2_failed(self, message: str) -> None:
+        self._set_measure_button(self.btn_spo2, "BtnSpO2Fail", "วัดไม่สำเร็จ\nออกซิเจน", True)
+        self._set_system_message(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False)
+        return
         self.btn_spo2.setEnabled(True)
         self.btn_spo2.setText("เริ่มวัดค่า\nออกซิเจน")
         self._set_system_message(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False)
         self._show_popup(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_temperature(self) -> None:
+        self._set_measure_button(self.btn_temp, "BtnTempBusy", "กำลังวัด\nอุณหภูมิ", False)
+        self._set_system_message("กำลังวัดอุณหภูมิร่างกาย", success=None)
+        self._start_task(self.provider.measure_temperature, self._on_temperature_done, self._on_temperature_failed)
+        return
         self.btn_temp.setText("กำลังวัดค่า\nอุณหภูมิ")
         self.btn_temp.setEnabled(False)
         self._set_system_message("กำลังวัดอุณหภูมิร่างกาย", success=None)
@@ -1238,12 +1423,20 @@ class CareKeeperWindow(QMainWindow):
 
     def _on_temperature_done(self, result: object) -> None:
         self.vitals.temperature = float(result)
+        self._set_measure_button(self.btn_temp, "BtnTempDone", "วัดแล้ว\nอุณหภูมิ", True)
+        self._set_system_message("วัดอุณหภูมิร่างกายสำเร็จ", success=True)
+        self._refresh_values()
+        return
+        self.vitals.temperature = float(result)
         self.btn_temp.setEnabled(True)
         self.btn_temp.setText("เริ่มวัดค่า\nอุณหภูมิ")
         self._set_system_message("วัดอุณหภูมิร่างกายสำเร็จ", success=True)
         self._refresh_values()
 
     def _on_temperature_failed(self, message: str) -> None:
+        self._set_measure_button(self.btn_temp, "BtnTempFail", "วัดไม่สำเร็จ\nอุณหภูมิ", True)
+        self._set_system_message(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False)
+        return
         self.btn_temp.setEnabled(True)
         self.btn_temp.setText("เริ่มวัดค่า\nอุณหภูมิ")
         self._set_system_message(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False)
@@ -1262,12 +1455,16 @@ class CareKeeperWindow(QMainWindow):
         self.btn_temp.setText("เริ่มวัดค่า\nอุณหภูมิ")
         self.btn_finish.setEnabled(True)
         self.btn_finish.setText("บันทึกข้อมูล  >")
+        self._set_measure_button(self.btn_bp, "BtnNIBP", "เริ่มวัดค่า\nความดัน", True)
+        self._set_measure_button(self.btn_spo2, "BtnSpO2Console", "เริ่มวัดค่า\nออกซิเจน", True)
+        self._set_measure_button(self.btn_temp, "BtnTempConsole", "เริ่มวัดค่า\nอุณหภูมิ", True)
         if hasattr(self, "manual_cid_panel"):
             self.manual_cid_panel.hide()
             self.btn_manual_card.show()
             self.btn_card.show()
             self.scan_title.show()
             self.scan_subtitle.show()
+            self.scan_icon_frame.show()
             self.txt_manual_cid.clear()
         self._refresh_patient()
         self._refresh_values()
@@ -1275,6 +1472,14 @@ class CareKeeperWindow(QMainWindow):
         self.stack.setCurrentIndex(0)
 
     def _bp_cooldown_tick(self) -> None:
+        if self.bp_cooldown_seconds > 0:
+            self.bp_cooldown_seconds -= 1
+            if self.bp_cooldown_seconds > 0:
+                self._set_measure_button(self.btn_bp, "BtnNIBPBusy", f"รอ\n{self.bp_cooldown_seconds} วินาที", False)
+                return
+        self.cooldown_timer.stop()
+        self._set_measure_button(self.btn_bp, "BtnNIBPDone", "วัดแล้ว\nความดัน", True)
+        return
         if self.bp_cooldown_seconds > 0:
             self.bp_cooldown_seconds -= 1
             self.btn_bp.setText(f"รอ\n{self.bp_cooldown_seconds} \nวินาที")
