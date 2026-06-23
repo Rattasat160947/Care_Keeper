@@ -47,7 +47,7 @@ QPushButton#BtnManualCard {
     background: transparent;
     color: #e5e7eb;
     border: none;
-    font-size: 15px;
+    font-size: 22px;
     font-weight: 900;
 }
 QPushButton#BtnManualCard:hover { color: #79f1ff; }

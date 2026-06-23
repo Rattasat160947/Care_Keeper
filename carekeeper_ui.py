@@ -861,10 +861,10 @@ class CareKeeperWindow(QMainWindow):
 
         self.btn_card = QPushButton("อ่านข้อมูลบัตร")
         self.btn_card.setObjectName("BtnScanCard")
-        self.btn_card.setFixedSize(760, 62)
+        self.btn_card.setFixedSize(520, 62)
         self.btn_card.clicked.connect(self._read_card)
 
-        self.btn_manual_card = QPushButton("กรณีอ่านไม่สำเร็จ กรุณากรอกเลขบัตรเอง")
+        self.btn_manual_card = QPushButton("กรณีอ่านไม่สำเร็จ กรุณากรอกเลขบัตรเอง คลิกที่นี่")
         self.btn_manual_card.setObjectName("BtnManualCard")
         self.btn_manual_card.setFixedWidth(430)
         self.btn_manual_card.setMinimumWidth(0)
@@ -887,7 +887,7 @@ class CareKeeperWindow(QMainWindow):
         self.txt_manual_cid.setMaxLength(17)
         self.txt_manual_cid.setAlignment(Qt.AlignCenter)
         self.txt_manual_cid.setPlaceholderText("0-0000-00000-00-0")
-        self.txt_manual_cid.setFixedWidth(520)
+        self.txt_manual_cid.setFixedWidth(450)
         self.txt_manual_cid.textChanged.connect(self._format_manual_cid_input)
         self.txt_manual_cid.returnPressed.connect(self._submit_manual_cid)
         self.btn_confirm_manual_cid = QPushButton("ยืนยันข้อมูล")
@@ -896,7 +896,7 @@ class CareKeeperWindow(QMainWindow):
         self.btn_confirm_manual_cid.clicked.connect(self._submit_manual_cid)
         self.btn_cancel_manual_cid = QPushButton("ย้อนกลับ")
         self.btn_cancel_manual_cid.setObjectName("BtnCancelManualCid")
-        self.btn_cancel_manual_cid.setFixedSize(150, 44)
+        self.btn_cancel_manual_cid.setFixedSize(210, 44)
         self.btn_cancel_manual_cid.clicked.connect(self._hide_manual_cid_entry)
         manual_actions = QHBoxLayout()
         manual_actions.setContentsMargins(0, 0, 0, 0)
@@ -907,11 +907,10 @@ class CareKeeperWindow(QMainWindow):
         manual_actions.addStretch(1)
         manual_layout.addWidget(manual_title)
         manual_layout.addWidget(self.txt_manual_cid, alignment=Qt.AlignCenter)
+        manual_layout.addSpacing(18)
         manual_layout.addLayout(manual_actions)
         self.manual_cid_panel.hide()
 
-        self.lbl_scan_message = self._console_label("SYSTEM: พร้อมอ่านข้อมูลบัตร", "SystemMessageNeutral", Qt.AlignCenter)
-        self.lbl_scan_message.setWordWrap(True)
 
         card_layout.addStretch(1)
         card_layout.addWidget(title)
@@ -920,7 +919,6 @@ class CareKeeperWindow(QMainWindow):
         card_layout.addWidget(self.btn_card, alignment=Qt.AlignCenter)
         card_layout.addWidget(self.btn_manual_card, alignment=Qt.AlignCenter)
         card_layout.addWidget(self.manual_cid_panel)
-        card_layout.addWidget(self.lbl_scan_message)
         card_layout.addStretch(1)
 
         outer.addWidget(card, 1)
