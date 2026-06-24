@@ -75,11 +75,11 @@ class DeviceStatus:
 @dataclass
 class MeasurementHistoryRecord:
     measured_at: str
-    systolic: int
-    diastolic: int
-    pulse: int
-    spo2: int
-    temperature: float
+    systolic: int | None
+    diastolic: int | None
+    pulse: int | None
+    spo2: int | None
+    temperature: float | None
 
 
 class CareKeeperProvider:
@@ -168,10 +168,10 @@ class MockCareKeeperProvider(CareKeeperProvider):
 
     def get_measurement_history(self, patient_id: str) -> list[MeasurementHistoryRecord]:
         return [
-            MeasurementHistoryRecord("23 มิ.ย. 2569 10:30", 117, 81, 87, 99, 36.3),
-            MeasurementHistoryRecord("22 มิ.ย. 2569 15:10", 121, 79, 82, 98, 36.5),
-            MeasurementHistoryRecord("21 มิ.ย. 2569 09:45", 114, 76, 78, 99, 36.4),
-            MeasurementHistoryRecord("19 มิ.ย. 2569 14:20", 126, 84, 90, 97, 36.7),
+            MeasurementHistoryRecord("24/06/69 12:00", 120, 78, 70, 98, 35.5),
+            MeasurementHistoryRecord("24/06/69 11:55", 128, 89, 85, None, 36.6),
+            MeasurementHistoryRecord("24/06/69 11:49", 119, 78, 80, 78, 35.5),
+            MeasurementHistoryRecord("24/06/69 11:35", 120, 78, None, 76, 37.0),
         ]
     
     def send_data(self, payload: dict) -> bool:

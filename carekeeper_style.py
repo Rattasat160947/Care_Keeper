@@ -331,30 +331,51 @@ QPushButton#BtnSummarySmall, QPushButton#BtnFinish, QPushButton#BtnBack {
 
 QFrame#HistoryPanel {
     background: #050709;
-    border: 1px solid #334155;
-    border-radius: 12px;
-}
-QScrollArea#HistoryScroll {
-    background: transparent;
     border: none;
-}
-QWidget#HistoryBody {
-    background: transparent;
+    border-radius: 0px;
 }
 QLabel#HistoryTitle {
     font-size: 18px;
     font-weight: 900;
-    color: #79f1ff;
+    color: #ffffff;
 }
-QLabel#HistoryRow {
-    background: #071016;
-    border: 1px solid #1f3a46;
-    border-radius: 10px;
-    padding: 8px 12px;
+QFrame#HistoryTable {
+    background: #030405;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+QLabel#HistoryHeader {
+    background: #030405;
+    border: 1px solid #20242a;
+    padding: 4px 6px;
     font-size: 15px;
     font-weight: 900;
     color: #f8fafc;
 }
+QLabel#HistoryDate {
+    background: #030405;
+    border: 1px solid #20242a;
+    padding: 2px 6px;
+    font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
+    font-size: 17px;
+    font-weight: 900;
+    color: #ffffff;
+}
+QLabel#HistoryValueYellow,
+QLabel#HistoryValuePink,
+QLabel#HistoryValueBlue,
+QLabel#HistoryValueGreen {
+    background: #030405;
+    border: 1px solid #20242a;
+    padding: 2px 6px;
+    font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
+    font-size: 26px;
+    font-weight: 900;
+}
+QLabel#HistoryValueYellow { color: #fff11a; }
+QLabel#HistoryValuePink { color: #FD3A9E; }
+QLabel#HistoryValueBlue { color: #79f1ff; }
+QLabel#HistoryValueGreen { color: #19c464; }
 
 QPushButton#BtnSummarySmall {
     background: #0b7cff;

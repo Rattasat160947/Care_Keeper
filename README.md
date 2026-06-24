@@ -1,115 +1,145 @@
 # Care Keeper
 
-Care Keeper is a Python / PySide6 graphical user interface for a Raspberry Pi based health monitoring device. The application reads patient information from a Thai ID card, displays vital sign measurements, and shows a measurement summary.
+Care Keeper เป็นโปรแกรมส่วนติดต่อผู้ใช้แบบกราฟิก (Graphical User Interface: GUI) สำหรับอุปกรณ์ตรวจวัดสัญญาณชีพที่ทำงานบน Raspberry Pi โดยพัฒนาด้วยภาษา Python และ PySide6 ระบบนี้ถูกออกแบบให้ใช้กับหน้าจอขนาด 1010 x 503 พิกเซล เพื่อช่วยให้ผู้ใช้งานสามารถอ่านข้อมูลผู้รับบริการจากบัตรประชาชน วัดค่าสัญญาณชีพ แสดงผลการวัด และส่งข้อมูลไปยังระบบหลังบ้านได้อย่างเป็นลำดับ
 
-## Current Workflow
+## วัตถุประสงค์ของระบบ
 
-1. Scan Thai national ID card
-2. Show patient information
-3. Measure vital signs from the dashboard
-4. Review the summary page
+โครงการนี้มีเป้าหมายเพื่อสร้างหน้าจอควบคุมและแสดงผลสำหรับเครื่องตรวจวัดสุขภาพเบื้องต้น โดยเน้นให้ผู้ใช้งานทั่วไปสามารถใช้งานได้ง่าย ลดความซับซ้อนของการอ่านค่าจากอุปกรณ์หลายชนิด และรวมผลการวัดไว้ในหน้าจอเดียว
 
-## Supported Measurements
+ระบบสามารถรองรับการทำงานหลักดังนี้
 
-- Blood pressure: systolic / diastolic
-- Pulse from the blood pressure monitor
-- Blood oxygen saturation: SpO2
-- Body temperature
-- Battery status
-- Wi-Fi status
-- Bluetooth status
+- อ่านข้อมูลผู้รับบริการจากบัตรประชาชนไทย
+- กรอกเลขบัตรประชาชนเองได้ในกรณีเครื่องอ่านบัตรมีปัญหา
+- วัดความดันโลหิตและชีพจรจากเครื่องวัดความดัน
+- วัดค่าออกซิเจนในเลือด (SpO2)
+- แสดงค่าอุณหภูมิร่างกาย
+- แสดงสถานะ Wi-Fi, Bluetooth และแบตเตอรี่
+- แสดงหน้าสรุปผลการวัด
+- แสดงข้อมูลย้อนหลัง 4 รายการล่าสุด
+- ส่งผลการวัดไปยัง Backend API
 
-## Application Files
+## ภาพรวมการทำงาน
+
+ระบบแบ่งหน้าจอหลักออกเป็น 3 หน้า
+
+1. **หน้าอ่านบัตรประชาชน**
+   ใช้สำหรับอ่านข้อมูลผู้รับบริการจากบัตรประชาชน หากอ่านบัตรไม่สำเร็จ ผู้ใช้สามารถกดปุ่มเพื่อกรอกเลขบัตรประชาชน 13 หลักด้วยตนเองได้ โดยข้อมูลอื่นจะแสดงเป็น `--`
+
+2. **หน้าวัดค่าสัญญาณชีพ**
+   แสดงข้อมูลผู้รับบริการ สถานะการเชื่อมต่อ และปุ่มสำหรับเริ่มวัดค่าจากอุปกรณ์แต่ละชนิด ได้แก่ ความดันโลหิต ออกซิเจนในเลือด และอุณหภูมิ เมื่อวัดสำเร็จ ระบบจะแสดงค่าที่อ่านได้บนหน้าจอ
+
+3. **หน้าสรุปผลการวัด**
+   แสดงผลการวัดทั้งหมดในรูปแบบตาราง พร้อมปุ่มบันทึกข้อมูลไปยังระบบหลังบ้าน และมีปุ่มดูข้อมูลย้อนหลัง 4 รายการล่าสุดเพื่อให้ผู้ใช้งานตรวจสอบประวัติได้ง่าย
+
+## ค่าที่ระบบแสดงผล
+
+| รายการ | รายละเอียด |
+| --- | --- |
+| ความดันโลหิต | แสดงค่า SYS/DIA หน่วย mmHg |
+| ชีพจร | แสดงค่า Pulse หน่วย bpm |
+| ออกซิเจนในเลือด | แสดงค่า SpO2 หน่วย % |
+| อุณหภูมิร่างกาย | แสดงค่าอุณหภูมิ หน่วย °C |
+| ข้อมูลย้อนหลัง | แสดง 4 รายการล่าสุด โดยมีวันที่ เวลา และค่าที่วัดได้ |
+| สถานะอุปกรณ์ | แสดง Wi-Fi, Bluetooth และแบตเตอรี่ |
+
+## โครงสร้างไฟล์สำคัญ
 
 ```text
 Care_Keeper/
-+-- main_demo.py             # Runs the GUI with mock data for UI preview
-+-- main_real.py             # Runs the GUI with real hardware providers
-+-- carekeeper_ui.py         # Main PySide6 GUI
-+-- carekeeper_providers.py  # Mock and real data providers
-+-- requirement.txt          # Python dependencies
-+-- BP.py                    # Standalone blood pressure test script
-+-- H59_BLE.py               # Standalone BLE SpO2 / heart-rate test script
-+-- battery.py               # Standalone UPS / battery test script
-+-- ble_scaner.py            # BLE scanner script
-+-- idcard.py                # Standalone Thai ID card test script
-+-- lib/
-    +-- bp_monitor.py        # Blood pressure monitor module
-    +-- ups.py               # UPS / battery module
-    +-- h59_ble/             # H59 BLE sensor modules
-    +-- thaiidcard/          # Thai ID card reader modules
++-- main_demo.py              # เรียกใช้งาน GUI ด้วยข้อมูลจำลอง
++-- main_real.py              # เรียกใช้งาน GUI กับอุปกรณ์จริง
++-- carekeeper_ui.py          # โค้ดหน้าจอหลักและ logic ของ UI
++-- carekeeper_style.py       # stylesheet และรูปแบบสี/ฟอนต์ของระบบ
++-- carekeeper_providers.py   # ชั้นจัดการข้อมูล mock และ real hardware
++-- requirement.txt           # รายการ Python libraries ที่ต้องติดตั้ง
++-- idcard.py                 # ไฟล์ทดสอบอ่านบัตรประชาชนแบบแยกเดี่ยว
++-- BP.py                     # ไฟล์ทดสอบเครื่องวัดความดันแบบแยกเดี่ยว
++-- H59_BLE.py                # ไฟล์ทดสอบอุปกรณ์ SpO2 ผ่าน Bluetooth
++-- battery.py                # ไฟล์ทดสอบสถานะแบตเตอรี่
++-- ble_scaner.py             # ไฟล์ทดสอบค้นหา Bluetooth device
++-- style/                    # ฟอนต์และไฟล์ไอคอนของระบบ
++-- lib/                      # โมดูลสำหรับเชื่อมต่ออุปกรณ์จริง
 ```
 
-## Python Setup
+## แนวคิดการแยกส่วนของโปรแกรม
 
-Create a virtual environment:
+โปรแกรมแยกส่วนการทำงานออกเป็น 2 ชั้นหลัก
+
+- `carekeeper_ui.py` รับผิดชอบการแสดงผล ปุ่ม เมนู ตาราง และการเปลี่ยนหน้าจอ
+- `carekeeper_providers.py` รับผิดชอบการอ่านข้อมูลจากแหล่งข้อมูล เช่น mock data, เครื่องอ่านบัตร, เครื่องวัดความดัน, Bluetooth sensor, แบตเตอรี่ และ Backend API
+
+การแยกส่วนนี้ช่วยให้สามารถทดสอบหน้าจอได้โดยไม่ต้องต่ออุปกรณ์จริง และสามารถเปลี่ยนการเชื่อมต่ออุปกรณ์จริงได้โดยไม่ต้องแก้โครงสร้างหน้าจอหลักมากนัก
+
+## การติดตั้ง Python Environment
+
+สร้าง virtual environment
 
 ```bash
 python -m venv .venv
 ```
 
-Activate it on Windows PowerShell:
+เปิดใช้งาน virtual environment บน Windows PowerShell
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Activate it on Raspberry Pi / Linux:
+เปิดใช้งาน virtual environment บน Raspberry Pi / Linux
 
 ```bash
 source .venv/bin/activate
 ```
 
-Install Python dependencies:
+ติดตั้ง dependencies
 
 ```bash
 pip install -r requirement.txt
 ```
 
-## Run Mock UI
+## การรันโปรแกรมแบบ Mock UI
 
-Use this mode while designing or testing the interface without connected hardware:
+โหมดนี้ใช้สำหรับทดสอบหน้าจอโดยไม่ต้องเชื่อมต่ออุปกรณ์จริง เหมาะสำหรับการออกแบบ UI และตรวจสอบ flow การทำงาน
 
 ```bash
 python main_demo.py
 ```
 
-This mode uses `MockCareKeeperProvider` and generates sample patient data and vital signs.
+ข้อมูลในโหมดนี้จะถูกสร้างจาก `MockCareKeeperProvider` เช่น ข้อมูลผู้รับบริการ ตัวเลขค่าสัญญาณชีพ สถานะแบตเตอรี่ และข้อมูลย้อนหลัง
 
-## Run With Real Hardware
+## การรันโปรแกรมกับอุปกรณ์จริง
 
-Use this mode on the Raspberry Pi after connecting the required devices:
+โหมดนี้ใช้สำหรับ Raspberry Pi ที่เชื่อมต่ออุปกรณ์จริงแล้ว
 
 ```bash
 python main_real.py
 ```
 
-This mode uses `RealCareKeeperProvider`. It does not generate fake measurement values. If a device is missing or cannot be read, the GUI will show an error message.
+ในโหมดนี้ระบบจะใช้ `RealCareKeeperProvider` ซึ่งจะอ่านค่าจากอุปกรณ์จริง หากอุปกรณ์ไม่พร้อมใช้งาน ระบบจะแสดงข้อความแจ้งเตือนบนหน้าจอ
 
-## Raspberry Pi System Packages
+## System Packages สำหรับ Raspberry Pi
 
-Install system packages required by the hardware modules:
+ติดตั้ง package ที่จำเป็นสำหรับการใช้งาน hardware
 
 ```bash
 sudo apt update
 sudo apt install python3-smbus i2c-tools bluetooth bluez pcscd libpcsclite-dev swig python3-dev
 ```
 
-Add the current user to hardware access groups:
+เพิ่มสิทธิ์ผู้ใช้ให้เข้าถึงอุปกรณ์
 
 ```bash
 sudo usermod -aG dialout,bluetooth,i2c $USER
 ```
 
-Reboot after changing groups:
+หลังจากเพิ่มสิทธิ์แล้วควร reboot เครื่อง
 
 ```bash
 sudo reboot
 ```
 
-## Hardware Configuration
+## การตั้งค่าอุปกรณ์และ Backend
 
-For quick real-device testing, hardware values are currently hardcoded near the top of `carekeeper_providers.py`:
+ค่าทดสอบของอุปกรณ์และ API ถูกกำหนดไว้ใน `carekeeper_providers.py`
 
 ```python
 TEST_BP_PORT = "/dev/ttyUSB0"
@@ -120,35 +150,29 @@ TEST_API_KEY_HEADER = "api-key"
 TEST_API_KEY = "test"
 ```
 
-Edit these values before running `main_real.py` if the serial port, BLE address, or backend URL changes.
+หากเปลี่ยนเครื่องวัดความดัน อุปกรณ์ Bluetooth หรือ Backend API ให้แก้ค่าที่ส่วนนี้ก่อนรัน `main_real.py`
 
-The summary submit button sends JSON in the API format from the test PDF:
+## รูปแบบข้อมูลที่ส่งไป Backend
+
+เมื่อผู้ใช้กดปุ่มบันทึกข้อมูลในหน้าสรุป ระบบจะส่งข้อมูลแบบ JSON ไปยัง Backend API
 
 ```json
 {
   "mac": "11.11.11.11",
   "spo2": 98,
-  "heart_rate": 75,
-  "pr_bpm": 75,
+  "heart_rate": 70,
+  "pr_bpm": 70,
   "sys": 120,
-  "dia": 80,
-  "pulse": 75
+  "dia": 78,
+  "pulse": 70
 }
 ```
 
-On the dashboard, click the Wi-Fi or Bluetooth icon to scan and choose a network/device on Raspberry Pi.
+ค่า `mac` จะพยายามอ่านจาก MAC address ของ Raspberry Pi ก่อน หากอ่านไม่ได้จะใช้ค่าทดสอบที่กำหนดไว้ในระบบ
 
-## Hardware Notes
+## การทดสอบอุปกรณ์แยกเดี่ยว
 
-- Thai ID card data is read through `lib/thaiidcard/card.py`.
-- Blood pressure is read through `lib/bp_monitor.py`.
-- SpO2 is read through the H59 BLE module in `lib/h59_ble/`.
-- Battery percentage is read through `lib/ups.py`.
-- Temperature currently has a placeholder in the real provider and must be connected to the actual temperature sensor module before real temperature measurement is available.
-
-## Standalone Hardware Tests
-
-Run these scripts to test hardware modules separately before using the full GUI:
+ก่อนใช้งานร่วมกับ GUI สามารถทดสอบอุปกรณ์แต่ละส่วนแยกกันได้
 
 ```bash
 python idcard.py
@@ -158,9 +182,16 @@ python battery.py
 python ble_scaner.py
 ```
 
-## Development Notes
+การทดสอบแยกเดี่ยวช่วยให้ตรวจสอบได้ว่า hardware แต่ละชิ้นพร้อมใช้งานหรือไม่ ก่อนนำมาใช้งานร่วมกับหน้าจอหลัก
 
-- UI layout and styling are in `carekeeper_ui.py`.
-- Data access is separated into `carekeeper_providers.py`.
-- Use `main_demo.py` for interface development.
-- Use `main_real.py` only when the Raspberry Pi and hardware sensors are connected.
+## หมายเหตุด้านการพัฒนา
+
+- ปัจจุบันระบบมีทั้งโหมด mock และโหมดอุปกรณ์จริง
+- ส่วนอุณหภูมิใน `RealCareKeeperProvider` ยังเป็น placeholder และต้องเชื่อมต่อกับโมดูลวัดอุณหภูมิจริงเพิ่มเติม
+- ส่วนข้อมูลย้อนหลังใน provider จริงยังเตรียมไว้สำหรับเชื่อมต่อ Backend API แบบ GET ในอนาคต
+- ระบบใช้หน้าจอขนาด 1010 x 503 พิกเซลเป็นหลัก จึงควรตรวจสอบ layout บน Raspberry Pi ทุกครั้งหลังแก้ UI
+- หากนำไปใช้งานจริงควรย้ายค่าที่เป็น API URL, API key และ hardware address ออกจากโค้ดไปไว้ในไฟล์ `.env` หรือระบบ configuration ที่ปลอดภัยกว่า
+
+## สรุป
+
+Care Keeper เป็นระบบ GUI สำหรับช่วยให้การตรวจวัดสัญญาณชีพด้วย Raspberry Pi เป็นขั้นตอนที่ใช้งานง่ายขึ้น โดยรวมการอ่านข้อมูลบัตรประชาชน การวัดค่าสัญญาณชีพ การแสดงผล การดูข้อมูลย้อนหลัง และการส่งข้อมูลไปยัง Backend ไว้ในโปรแกรมเดียว ระบบถูกออกแบบให้แยกส่วนระหว่างหน้าจอและการเชื่อมต่ออุปกรณ์ เพื่อให้สามารถพัฒนา ทดสอบ และปรับเปลี่ยนอุปกรณ์ได้สะดวกในอนาคต

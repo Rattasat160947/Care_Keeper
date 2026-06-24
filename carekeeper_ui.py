@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -1131,24 +1130,53 @@ class CareKeeperWindow(QMainWindow):
         self.history_panel = QFrame()
         self.history_panel.setObjectName("HistoryPanel")
         history_layout = QVBoxLayout(self.history_panel)
-        history_layout.setContentsMargins(14, 8, 14, 8)
+        history_layout.setContentsMargins(0, 0, 0, 0)
         history_layout.setSpacing(8)
-        history_layout.addWidget(self._console_label("ข้อมูลย้อนหลัง", "HistoryTitle"))
 
-        self.history_scroll = QScrollArea()
-        self.history_scroll.setObjectName("HistoryScroll")
-        self.history_scroll.setWidgetResizable(True)
-        self.history_scroll.setFrameShape(QFrame.NoFrame)
-        history_body = QWidget()
-        history_body.setObjectName("HistoryBody")
-        self.history_rows_layout = QVBoxLayout(history_body)
-        self.history_rows_layout.setContentsMargins(0, 0, 0, 0)
-        self.history_rows_layout.setSpacing(8)
-        self.history_rows: list[QLabel] = []
-        for _ in range(4):
-            self._append_history_row()
-        self.history_scroll.setWidget(history_body)
-        history_layout.addWidget(self.history_scroll, 1)
+        history_table = QFrame()
+        history_table.setObjectName("HistoryTable")
+        history_grid = QGridLayout(history_table)
+        history_grid.setContentsMargins(0, 0, 0, 0)
+        history_grid.setHorizontalSpacing(0)
+        history_grid.setVerticalSpacing(0)
+
+        headers = [
+            "วันที่และเวลา",
+            "ความดันโลหิต\n(mmHg)",
+            "ชีพจร\n(bpm)",
+            "ออกซิเจนในเลือด\n(SpO2 %)",
+            "อุณหภูมิ\n(°C)",
+        ]
+        for column, header_text in enumerate(headers):
+            header_label = self._console_label(header_text, "HistoryHeader", Qt.AlignCenter)
+            header_label.setWordWrap(True)
+            header_label.setMinimumHeight(42)
+            history_grid.addWidget(header_label, 0, column)
+
+        self.history_cells: list[list[QLabel]] = []
+        cell_names = [
+            "HistoryDate",
+            "HistoryValueYellow",
+            "HistoryValuePink",
+            "HistoryValueBlue",
+            "HistoryValueGreen",
+        ]
+        for row in range(4):
+            row_cells: list[QLabel] = []
+            for column, object_name in enumerate(cell_names):
+                cell = self._console_label("-", object_name, Qt.AlignCenter)
+                cell.setWordWrap(True)
+                cell.setMinimumHeight(46)
+                history_grid.addWidget(cell, row + 1, column)
+                row_cells.append(cell)
+            self.history_cells.append(row_cells)
+
+        history_grid.setColumnStretch(0, 2)
+        history_grid.setColumnStretch(1, 2)
+        history_grid.setColumnStretch(2, 1)
+        history_grid.setColumnStretch(3, 2)
+        history_grid.setColumnStretch(4, 2)
+        history_layout.addWidget(history_table, 1)
         self.history_panel.hide()
         panel_layout.addWidget(self.history_panel)
 
@@ -1261,42 +1289,45 @@ class CareKeeperWindow(QMainWindow):
             self._on_history_failed,
         )
 
-    def _append_history_row(self) -> QLabel:
-        row_label = self._console_label("-", "HistoryRow")
-        row_label.setWordWrap(True)
-        row_label.setMinimumHeight(58)
-        self.history_rows.append(row_label)
-        self.history_rows_layout.addWidget(row_label)
-        return row_label
+    @staticmethod
+    def _format_history_time(value: object) -> str:
+        text = "-" if value in (None, "") else str(value)
+        if " " in text:
+            date_part, time_part = text.rsplit(" ", 1)
+            return f"{date_part}\n{time_part}"
+        return text
 
     @staticmethod
-    def _format_history_record(record: MeasurementHistoryRecord, index: int) -> str:
-        return (
-            f"รายการที่ {index + 1} | วันที่/เวลา: {record.measured_at}\n"
-            f"ความดันโลหิต {record.systolic}/{record.diastolic} mmHg   "
-            f"ชีพจร {record.pulse} bpm   "
-            f"ออกซิเจนในเลือด {record.spo2}%   "
-            f"อุณหภูมิ {record.temperature:.1f}°C"
-        )
+    def _format_history_number(value: object, decimals: int = 0) -> str:
+        if value in (None, ""):
+            return "-"
+        if decimals > 0:
+            return f"{float(value):.{decimals}f}"
+        return str(value)
+
+    def _set_history_row(self, row: int, record: MeasurementHistoryRecord | None) -> None:
+        cells = self.history_cells[row]
+        if record is None:
+            for cell in cells:
+                cell.setText("-")
+            return
+
+        bp_text = "-"
+        if record.systolic is not None and record.diastolic is not None:
+            bp_text = f"{record.systolic}/{record.diastolic}"
+
+        cells[0].setText(self._format_history_time(record.measured_at))
+        cells[1].setText(bp_text)
+        cells[2].setText(self._format_history_number(record.pulse))
+        cells[3].setText(self._format_history_number(record.spo2))
+        cells[4].setText(self._format_history_number(record.temperature, 1))
 
     def _on_history_done(self, result: object) -> None:
-        records = result if isinstance(result, list) else []
-        if not records:
-            for label in self.history_rows[1:]:
-                label.hide()
-            self.history_rows[0].setText("ยังไม่มีข้อมูลย้อนหลังสำหรับผู้รับบริการนี้")
-            self.history_rows[0].show()
-        else:
-            while len(self.history_rows) < len(records):
-                self._append_history_row()
-            for index, label in enumerate(self.history_rows):
-                if index >= len(records):
-                    label.hide()
-                    continue
-                record = records[index]
-                if isinstance(record, MeasurementHistoryRecord):
-                    label.setText(self._format_history_record(record, index))
-                    label.show()
+        records = [record for record in (result if isinstance(result, list) else []) if isinstance(record, MeasurementHistoryRecord)]
+        records = records[:4]
+        for row in range(4):
+            record = records[row] if row < len(records) else None
+            self._set_history_row(row, record)
 
         self.summary_table.hide()
         self.history_panel.show()
@@ -1306,10 +1337,10 @@ class CareKeeperWindow(QMainWindow):
     def _on_history_failed(self, message: str) -> None:
         self.history_panel.show()
         self.summary_table.hide()
-        self.history_rows[0].setText(f"โหลดข้อมูลย้อนหลังไม่สำเร็จ: {message}")
-        self.history_rows[0].show()
-        for label in self.history_rows[1:]:
-            label.hide()
+        for row in range(4):
+            self._set_history_row(row, None)
+        self.history_cells[0][0].setText("โหลดข้อมูล\nไม่สำเร็จ")
+        self.history_cells[0][1].setText("-")
         self.btn_history.setEnabled(True)
         self.btn_history.setText("สรุปผลการวัด")
 
