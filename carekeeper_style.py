@@ -207,7 +207,7 @@ QFrame#StatusPill, QFrame#BatteryPill {
 QLabel#StatusText {
     font-size: 10px;
     font-weight: 900;
-    color: #000000;
+    color: #ffffff;
 }
 
 QFrame#ScanPanel {
