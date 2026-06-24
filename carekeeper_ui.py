@@ -10,6 +10,7 @@ from PySide6.QtCore import QRectF, QThread, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QBrush, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -451,6 +452,8 @@ class CareKeeperWindow(QMainWindow):
                 padding: 6px 14px;
                 border: 2px solid #9ec9d6;
                 border-radius: 10px;
+                color: #0b1f33;
+                background-color: #ffffff;
             }
             QPushButton {
                 font-size: 20px;
@@ -726,23 +729,14 @@ class CareKeeperWindow(QMainWindow):
         self._start_task(self.provider.read_patient, self._on_patient_read, self._on_patient_failed)
 
     def _show_manual_cid_entry(self) -> None:
-        self.scan_title.hide()
-        self.scan_subtitle.hide()
-        self.scan_icon_frame.hide()
-        self.btn_card.hide()
-        self.manual_cid_panel.show()
-        self.btn_manual_card.hide()
-        self.txt_manual_cid.setFocus()
+        self.txt_manual_cid.clear()
         self._set_system_message("กรอกเลขบัตรประชาชน 13 หลักเมื่อเครื่องอ่านบัตรไม่พร้อมใช้งาน", success=None)
+        self.manual_cid_dialog.show()
+        self.txt_manual_cid.setFocus()
 
     def _hide_manual_cid_entry(self) -> None:
+        self.manual_cid_dialog.hide()
         self.txt_manual_cid.clear()
-        self.manual_cid_panel.hide()
-        self.btn_manual_card.show()
-        self.btn_card.show()
-        self.scan_title.show()
-        self.scan_subtitle.show()
-        self.scan_icon_frame.hide()
         self._set_system_message("พร้อมอ่านข้อมูลบัตร", success=None)
 
     def _submit_manual_cid(self) -> None:
@@ -908,8 +902,17 @@ class CareKeeperWindow(QMainWindow):
         manual_layout.addWidget(self.txt_manual_cid, alignment=Qt.AlignCenter)
         manual_layout.addSpacing(18)
         manual_layout.addLayout(manual_actions)
-        self.manual_cid_panel.hide()
 
+        # A real top-level dialog (like the Wi-Fi/Bluetooth prompts) so the
+        # touchscreen on-screen keyboard auto-shows; an inline embedded field
+        # in the main window never gets the focus event the keyboard watches for.
+        self.manual_cid_dialog = QDialog(self)
+        self.manual_cid_dialog.setWindowTitle("กรอกเลขบัตรประชาชน")
+        self.manual_cid_dialog.setModal(True)
+        self.manual_cid_dialog.setStyleSheet("QDialog { background-color: #050709; }")
+        dialog_layout = QVBoxLayout(self.manual_cid_dialog)
+        dialog_layout.setContentsMargins(32, 28, 32, 28)
+        dialog_layout.addWidget(self.manual_cid_panel)
 
         card_layout.addStretch(1)
         card_layout.addWidget(title)
@@ -917,7 +920,6 @@ class CareKeeperWindow(QMainWindow):
         card_layout.addSpacing(18)
         card_layout.addWidget(self.btn_card, alignment=Qt.AlignCenter)
         card_layout.addWidget(self.btn_manual_card, alignment=Qt.AlignCenter)
-        card_layout.addWidget(self.manual_cid_panel)
         card_layout.addStretch(1)
 
         outer.addWidget(card, 1)
@@ -1521,8 +1523,8 @@ class CareKeeperWindow(QMainWindow):
         self._set_measure_button(self.btn_bp, "BtnNIBP", "เริ่มวัดค่า\nความดัน", True)
         self._set_measure_button(self.btn_spo2, "BtnSpO2Console", "เริ่มวัดค่า\nออกซิเจน", True)
         self._set_measure_button(self.btn_temp, "BtnTempConsole", "เริ่มวัดค่า\nอุณหภูมิ", True)
-        if hasattr(self, "manual_cid_panel"):
-            self.manual_cid_panel.hide()
+        if hasattr(self, "manual_cid_dialog"):
+            self.manual_cid_dialog.hide()
             self.btn_manual_card.show()
             self.btn_card.show()
             self.scan_title.show()
