@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -1589,6 +1590,10 @@ class CareKeeperWindow(QMainWindow):
 
 def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
     global APP_FONT_FAMILY, NUMBER_FONT_FAMILY
+
+    # Onscreen keyboards on Raspberry Pi (onboard/squeekboard) auto-show based on
+    # AT-SPI focus events, which Qt apps don't emit unless accessibility is enabled.
+    os.environ.setdefault("QT_ACCESSIBILITY", "1")
 
     app = QApplication(sys.argv)
     APP_FONT_FAMILY = _load_app_font(app)
