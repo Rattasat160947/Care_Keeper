@@ -339,6 +339,7 @@ class CareKeeperWindow(QMainWindow):
         self.vitals = VitalState()
         self.tasks: list[ProviderTask] = []
         self.status_task: ProviderTask | None = None
+        self.network_task: ProviderTask | None = None
         self.bp_cooldown_seconds = 0
 
         self.setWindowTitle(f"CareKeeper - {mode_name}")
@@ -413,7 +414,28 @@ class CareKeeperWindow(QMainWindow):
             self.tasks.remove(task)
         if self.status_task is task:
             self.status_task = None
+        if self.network_task is task:
+            self.network_task = None
         task.deleteLater()
+
+    def _start_network_task(
+        self,
+        action: Callable[[], object],
+        on_success: Callable[[object], None],
+        on_failed: Callable[[str], None],
+    ) -> bool:
+        if self.network_task and self.network_task.isRunning():
+            self._show_toast("กำลังดำเนินการเชื่อมต่ออยู่ กรุณารอสักครู่", success=False, duration_ms=1800)
+            return False
+
+        task = ProviderTask(action, self)
+        self.network_task = task
+        task.completed.connect(on_success)
+        task.failed.connect(on_failed)
+        task.finished.connect(lambda: self._release_task(task))
+        self.tasks.append(task)
+        task.start()
+        return True
 
     def _request_device_status(self) -> None:
         if self.status_task and self.status_task.isRunning():
@@ -431,7 +453,7 @@ class CareKeeperWindow(QMainWindow):
         dialog.setMinimumSize(620, 460)
         dialog.setStyleSheet(
             """
-            QInputDialog { background-color: #ffffff; }
+            QInputDialog { background-color: #ffffff; color: #0b1f33; }
             QLabel { font-size: 22px; font-weight: 700; color: #0b1f33; }
             QComboBox {
                 font-size: 22px;
@@ -439,21 +461,32 @@ class CareKeeperWindow(QMainWindow):
                 padding: 6px 14px;
                 border: 2px solid #9ec9d6;
                 border-radius: 10px;
+                color: #0b1f33;
+                background-color: #ffffff;
             }
             QComboBox QAbstractItemView {
                 font-size: 22px;
                 min-height: 50px;
+                color: #0b1f33;
+                background-color: #ffffff;
                 selection-background-color: #d1fae5;
                 selection-color: #0b1f33;
             }
-            QLineEdit {
+            QInputDialog QLineEdit {
                 font-size: 22px;
                 min-height: 56px;
                 padding: 6px 14px;
                 border: 2px solid #9ec9d6;
                 border-radius: 10px;
-                color: #0b1f33;
+                color: #000000;
                 background-color: #ffffff;
+                selection-background-color: #0b7cff;
+                selection-color: #ffffff;
+            }
+            QInputDialog QLineEdit:focus {
+                color: #000000;
+                background-color: #ffffff;
+                border: 2px solid #0b7cff;
             }
             QPushButton {
                 font-size: 20px;
@@ -538,10 +571,14 @@ class CareKeeperWindow(QMainWindow):
         self._show_toast(f"ดำเนินการไม่สำเร็จ: {message}", success=False, duration_ms=3000)
 
     def _open_wifi_selector(self) -> None:
+        if self.network_task and self.network_task.isRunning():
+            self._show_toast("กำลังสแกนหรือเชื่อมต่อเครือข่ายอยู่", success=False, duration_ms=1800)
+            return
         self._show_toast("กำลังสแกน Wi-Fi...", success=True, duration_ms=1200)
-        self._start_task(self.provider.scan_wifi_networks, self._on_wifi_scan_done, self._on_wifi_action_failed)
+        self._start_network_task(self.provider.scan_wifi_networks, self._on_wifi_scan_done, self._on_wifi_action_failed)
 
     def _on_wifi_scan_done(self, result: object) -> None:
+        self.network_task = None
         networks = list(result) if isinstance(result, list) else []
         if not networks:
             self._show_toast("ไม่พบ Wi-Fi ที่เลือกได้", success=False)
@@ -556,21 +593,25 @@ class CareKeeperWindow(QMainWindow):
             return
 
         self._show_toast(f"กำลังเชื่อมต่อ Wi-Fi: {ssid}", success=True, duration_ms=1200)
-        self._start_task(
+        self._start_network_task(
             lambda: self.provider.connect_wifi(ssid, password or None),
             lambda result: self._on_network_connected("เชื่อมต่อ Wi-Fi สำเร็จ"),
             self._on_wifi_action_failed,
         )
 
     def _open_bluetooth_selector(self) -> None:
+        if self.network_task and self.network_task.isRunning():
+            self._show_toast("กำลังสแกนหรือเชื่อมต่ออุปกรณ์อยู่", success=False, duration_ms=1800)
+            return
         self._show_toast("กำลังสแกน Bluetooth...", success=True, duration_ms=1200)
-        self._start_task(
+        self._start_network_task(
             self.provider.scan_bluetooth_devices,
             self._on_bluetooth_scan_done,
             self._on_bluetooth_action_failed,
         )
 
     def _on_bluetooth_scan_done(self, result: object) -> None:
+        self.network_task = None
         devices = list(result) if isinstance(result, list) else []
         if not devices:
             self._show_toast("ไม่พบ Bluetooth device ที่เลือกได้", success=False)
@@ -584,7 +625,7 @@ class CareKeeperWindow(QMainWindow):
         index = labels.index(selected)
         address = devices[index][1]
         self._show_toast(f"กำลังเชื่อมต่อ Bluetooth: {address}", success=True, duration_ms=1200)
-        self._start_task(
+        self._start_network_task(
             lambda: self.provider.connect_bluetooth(address),
             lambda result: self._on_network_connected("เชื่อมต่อ Bluetooth สำเร็จ"),
             self._on_bluetooth_action_failed,
@@ -623,9 +664,14 @@ class CareKeeperWindow(QMainWindow):
         if getattr(self, "_formatting_manual_cid", False):
             return
 
+        invalid_chars = any(not ch.isdigit() and ch not in "- " for ch in text)
         digits = "".join(ch for ch in text if ch.isdigit())[:13]
         parts = [digits[:1], digits[1:5], digits[5:10], digits[10:12], digits[12:13]]
         formatted = "-".join(part for part in parts if part)
+
+        if hasattr(self, "lbl_manual_cid_error"):
+            self.lbl_manual_cid_error.setText("กรุณากรอกเฉพาะตัวเลข 0-9 เท่านั้น" if invalid_chars else "")
+
         if formatted == text:
             return
 
@@ -730,6 +776,7 @@ class CareKeeperWindow(QMainWindow):
 
     def _show_manual_cid_entry(self) -> None:
         self.txt_manual_cid.clear()
+        self.lbl_manual_cid_error.setText("")
         self._set_system_message("กรอกเลขบัตรประชาชน 13 หลักเมื่อเครื่องอ่านบัตรไม่พร้อมใช้งาน", success=None)
         self.manual_cid_dialog.show()
         self.txt_manual_cid.setFocus()
@@ -740,12 +787,20 @@ class CareKeeperWindow(QMainWindow):
         self._set_system_message("พร้อมอ่านข้อมูลบัตร", success=None)
 
     def _submit_manual_cid(self) -> None:
+        raw_text = self.txt_manual_cid.text()
+        if any(not ch.isdigit() and ch not in "- " for ch in raw_text):
+            self.lbl_manual_cid_error.setText("กรุณากรอกเฉพาะตัวเลข 0-9 เท่านั้น")
+            self._show_popup("กรุณากรอกเฉพาะตัวเลข 0-9 เท่านั้น", success=False, duration_ms=2200)
+            return
+
         cid = "".join(ch for ch in self.txt_manual_cid.text() if ch.isdigit())
         if len(cid) != 13:
+            self.lbl_manual_cid_error.setText("กรุณากรอกเลขบัตรประชาชนให้ครบ 13 หลัก")
             self._set_system_message("กรุณากรอกเลขบัตรประชาชนให้ครบ 13 หลัก", success=False)
             self._show_popup("กรุณากรอกเลขบัตรประชาชนให้ครบ 13 หลัก", success=False, duration_ms=2200)
             return
 
+        self.lbl_manual_cid_error.setText("")
         self.patient = PatientInfo(
             cid=cid,
             th_name="--",
@@ -881,8 +936,11 @@ class CareKeeperWindow(QMainWindow):
         self.txt_manual_cid.setAlignment(Qt.AlignCenter)
         self.txt_manual_cid.setPlaceholderText("0-0000-00000-00-0")
         self.txt_manual_cid.setFixedWidth(450)
+        self.txt_manual_cid.setInputMethodHints(Qt.ImhDigitsOnly)
         self.txt_manual_cid.textChanged.connect(self._format_manual_cid_input)
         self.txt_manual_cid.returnPressed.connect(self._submit_manual_cid)
+        self.lbl_manual_cid_error = self._console_label("", "ManualCidError", Qt.AlignCenter)
+        self.lbl_manual_cid_error.setFixedHeight(28)
         self.btn_confirm_manual_cid = QPushButton("ยืนยันข้อมูล")
         self.btn_confirm_manual_cid.setObjectName("BtnConfirmManualCid")
         self.btn_confirm_manual_cid.setFixedSize(210, 44)
@@ -900,6 +958,7 @@ class CareKeeperWindow(QMainWindow):
         manual_actions.addStretch(1)
         manual_layout.addWidget(manual_title)
         manual_layout.addWidget(self.txt_manual_cid, alignment=Qt.AlignCenter)
+        manual_layout.addWidget(self.lbl_manual_cid_error)
         manual_layout.addSpacing(18)
         manual_layout.addLayout(manual_actions)
 
@@ -909,6 +968,7 @@ class CareKeeperWindow(QMainWindow):
         self.manual_cid_dialog = QDialog(self)
         self.manual_cid_dialog.setWindowTitle("กรอกเลขบัตรประชาชน")
         self.manual_cid_dialog.setModal(True)
+        self.manual_cid_dialog.setFixedSize(620, 280)
         self.manual_cid_dialog.setStyleSheet("QDialog { background-color: #050709; }")
         dialog_layout = QVBoxLayout(self.manual_cid_dialog)
         dialog_layout.setContentsMargins(32, 28, 32, 28)
@@ -1267,7 +1327,7 @@ class CareKeeperWindow(QMainWindow):
             prefix = "FAIL"
 
         text = f"{prefix}: {message}"
-        for label_name in ("lbl_system_message", "lbl_summary_system_message", "lbl_scan_message"):
+        for label_name in ("lbl_system_message", "lbl_summary_system_message"):
             label = getattr(self, label_name, None)
             if label is None:
                 continue

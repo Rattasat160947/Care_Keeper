@@ -60,6 +60,11 @@ QLabel#ManualCidTitle {
     font-weight: 900;
     color: #e5e7eb;
 }
+QLabel#ManualCidError {
+    font-size: 15px;
+    font-weight: 900;
+    color: #fb7185;
+}
 QLineEdit#ManualCidInput {
     background: #030405;
     color: #f8fafc;

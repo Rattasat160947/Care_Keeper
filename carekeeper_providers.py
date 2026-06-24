@@ -35,7 +35,7 @@ def read_device_mac() -> str:
             continue
 
     try:
-        output = subprocess.check_output(["ip", "link"], text=True, errors="ignore")
+        output = subprocess.check_output(["ip", "link"], text=True, errors="ignore", timeout=3)
         match = re.search(r"link/ether\s+([0-9a-f:]{17})", output, re.IGNORECASE)
         if match:
             return match.group(1).lower()
@@ -310,20 +310,26 @@ class RealCareKeeperProvider(CareKeeperProvider):
                     creationflags=subprocess.CREATE_NO_WINDOW,
                     text=True,
                     errors="ignore",
+                    timeout=4,
                 )
                 return "State" in output and "connected" in output.lower()
             except Exception:
                 return False
 
         try:
-            output = subprocess.check_output(["iwgetid", "-r"], text=True, errors="ignore")
+            output = subprocess.check_output(["iwgetid", "-r"], text=True, errors="ignore", timeout=3)
             return bool(output.strip())
         except Exception:
             return False
 
     def _is_bluetooth_connected(self) -> bool:
         try:
-            output = subprocess.check_output(["bluetoothctl", "devices", "Connected"], text=True, errors="ignore")
+            output = subprocess.check_output(
+                ["bluetoothctl", "devices", "Connected"],
+                text=True,
+                errors="ignore",
+                timeout=4,
+            )
             return bool(output.strip())
         except Exception:
             return False
@@ -347,7 +353,7 @@ class RealCareKeeperProvider(CareKeeperProvider):
         current_state = self._is_wifi_connected()
         cmd = "off" if current_state else "on"
         try:
-            subprocess.run(["nmcli", "radio", "wifi", cmd], check=True)
+            subprocess.run(["nmcli", "radio", "wifi", cmd], check=True, timeout=6)
         except Exception as e:
             print(f"Failed to toggle WiFi: {e}")
 
@@ -357,6 +363,7 @@ class RealCareKeeperProvider(CareKeeperProvider):
                 ["nmcli", "-t", "-f", "SSID", "device", "wifi", "list"],
                 text=True,
                 errors="ignore",
+                timeout=10,
             )
             networks = []
             for line in output.splitlines():
@@ -364,6 +371,8 @@ class RealCareKeeperProvider(CareKeeperProvider):
                 if ssid and ssid not in networks:
                     networks.append(ssid)
             return networks
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("สแกน Wi-Fi ใช้เวลานานเกินไป")
         except Exception as e:
             raise RuntimeError(f"ไม่สามารถสแกน Wi-Fi ได้: {e}")
 
@@ -372,8 +381,10 @@ class RealCareKeeperProvider(CareKeeperProvider):
         if password:
             command.extend(["password", password])
         try:
-            subprocess.run(command, check=True, text=True, capture_output=True)
+            subprocess.run(command, check=True, text=True, capture_output=True, timeout=25)
             return True
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("เชื่อมต่อ Wi-Fi ใช้เวลานานเกินไป")
         except subprocess.CalledProcessError as e:
             message = e.stderr.strip() or e.stdout.strip() or str(e)
             raise RuntimeError(f"เชื่อมต่อ Wi-Fi ไม่สำเร็จ: {message}")
@@ -382,7 +393,7 @@ class RealCareKeeperProvider(CareKeeperProvider):
         current_state = self._is_bluetooth_connected()
         cmd = "power off" if current_state else "power on"
         try:
-            subprocess.run(["bluetoothctl", cmd.split()[0], cmd.split()[1]], check=True)
+            subprocess.run(["bluetoothctl", cmd.split()[0], cmd.split()[1]], check=True, timeout=6)
         except Exception as e:
             print(f"Failed to toggle Bluetooth: {e}")
 
@@ -391,15 +402,27 @@ class RealCareKeeperProvider(CareKeeperProvider):
             subprocess.run(["bluetoothctl", "scan", "on"], timeout=8, capture_output=True, text=True)
         except Exception:
             pass
+        finally:
+            try:
+                subprocess.run(["bluetoothctl", "scan", "off"], timeout=4, capture_output=True, text=True)
+            except Exception:
+                pass
 
         try:
-            output = subprocess.check_output(["bluetoothctl", "devices"], text=True, errors="ignore")
+            output = subprocess.check_output(
+                ["bluetoothctl", "devices"],
+                text=True,
+                errors="ignore",
+                timeout=6,
+            )
             devices = []
             for line in output.splitlines():
                 parts = line.strip().split(" ", 2)
                 if len(parts) >= 3 and parts[0] == "Device":
                     devices.append((parts[2], parts[1]))
             return devices
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("สแกน Bluetooth ใช้เวลานานเกินไป")
         except Exception as e:
             raise RuntimeError(f"ไม่สามารถสแกน Bluetooth ได้: {e}")
 
@@ -410,13 +433,15 @@ class RealCareKeeperProvider(CareKeeperProvider):
             subprocess.run(["bluetoothctl", "connect", address], timeout=15, check=True, capture_output=True, text=True)
             self.h59_device_address = address
             return True
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("เชื่อมต่อ Bluetooth ใช้เวลานานเกินไป")
         except subprocess.CalledProcessError as e:
             message = e.stderr.strip() or e.stdout.strip() or str(e)
             raise RuntimeError(f"เชื่อมต่อ Bluetooth ไม่สำเร็จ: {message}")
 
     def reboot_device(self) -> bool:
         try:
-            subprocess.run(["systemctl", "reboot"], check=True, capture_output=True, text=True)
+            subprocess.run(["systemctl", "reboot"], check=True, capture_output=True, text=True, timeout=5)
             return True
         except subprocess.CalledProcessError as e:
             message = e.stderr.strip() or e.stdout.strip() or str(e)
@@ -426,7 +451,7 @@ class RealCareKeeperProvider(CareKeeperProvider):
 
     def shutdown_device(self) -> bool:
         try:
-            subprocess.run(["systemctl", "poweroff"], check=True, capture_output=True, text=True)
+            subprocess.run(["systemctl", "poweroff"], check=True, capture_output=True, text=True, timeout=5)
             return True
         except subprocess.CalledProcessError as e:
             message = e.stderr.strip() or e.stdout.strip() or str(e)
