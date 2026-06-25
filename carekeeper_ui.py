@@ -510,6 +510,18 @@ class CareKeeperWindow(QMainWindow):
         dialog = self._styled_input_dialog(title)
         dialog.setLabelText(label)
         dialog.setTextEchoMode(QLineEdit.Password)
+
+        def focus_password_input() -> None:
+            dialog.raise_()
+            dialog.activateWindow()
+
+            line_edit = dialog.findChild(QLineEdit)
+            if line_edit:
+                line_edit.setFocusPolicy(Qt.StrongFocus)
+                line_edit.setFocus(Qt.OtherFocusReason)
+
+        QTimer.singleShot(250, focus_password_input)
+
         ok = bool(dialog.exec())
         return dialog.textValue(), ok
 
@@ -774,7 +786,13 @@ class CareKeeperWindow(QMainWindow):
         self.lbl_manual_cid_error.setText("")
         self._set_system_message("กรอกเลขบัตรประชาชน 13 หลักเมื่อเครื่องอ่านบัตรไม่พร้อมใช้งาน", success=None)
         self.manual_cid_dialog.show()
-        self.txt_manual_cid.setFocus()
+        self.manual_cid_dialog.raise_()
+        self.manual_cid_dialog.activateWindow()
+
+        QTimer.singleShot(
+            250,
+            lambda: self.txt_manual_cid.setFocus(Qt.OtherFocusReason),
+        )
 
     def _hide_manual_cid_entry(self) -> None:
         self.manual_cid_dialog.hide()
@@ -907,13 +925,19 @@ class CareKeeperWindow(QMainWindow):
         self.btn_card.setFixedSize(520, 62)
         self.btn_card.clicked.connect(self._read_card)
 
-        self.btn_manual_card = QPushButton("กรณีอ่านไม่สำเร็จ กรุณากรอกเลขบัตรเอง คลิกที่นี่")
+        self.btn_manual_card = QLabel()
         self.btn_manual_card.setObjectName("BtnManualCard")
-        self.btn_manual_card.setFixedWidth(430)
-        self.btn_manual_card.setMinimumWidth(0)
-        self.btn_manual_card.setMaximumWidth(16777215)
+        self.btn_manual_card.setTextFormat(Qt.RichText)
+        self.btn_manual_card.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.btn_manual_card.setCursor(Qt.PointingHandCursor)
+        self.btn_manual_card.setAlignment(Qt.AlignCenter)
+        self.btn_manual_card.setFixedWidth(520)
         self.btn_manual_card.setFixedHeight(38)
-        self.btn_manual_card.clicked.connect(self._show_manual_cid_entry)
+        self.btn_manual_card.setText(
+            'กรณีอ่านไม่สำเร็จ กรุณากรอกเลขบัตรเอง '
+            '<span style="color:#9aff2d;">คลิกที่นี่</span>'
+        )
+        self.btn_manual_card.mousePressEvent = lambda event: self._show_manual_cid_entry()
 
         self.manual_cid_panel = QFrame()
         self.manual_cid_panel.setObjectName("ManualCidPanel")
@@ -927,6 +951,7 @@ class CareKeeperWindow(QMainWindow):
         )
         self.txt_manual_cid = QLineEdit()
         self.txt_manual_cid.setObjectName("ManualCidInput")
+        self.txt_manual_cid.setFocusPolicy(Qt.StrongFocus)
         self.txt_manual_cid.setMaxLength(17)
         self.txt_manual_cid.setAlignment(Qt.AlignCenter)
         self.txt_manual_cid.setPlaceholderText("0-0000-00000-00-0")
@@ -1242,7 +1267,7 @@ class CareKeeperWindow(QMainWindow):
 
         footer = QHBoxLayout()
         footer.setContentsMargins(0, 8, 0, 0)
-        footer.setSpacing(18)
+        footer.setSpacing(14)
         self.btn_back_home = QPushButton("ย้อนกลับหน้าแรก")
         self.btn_back_home.setObjectName("BtnBack")
         self.btn_back_home.setFixedSize(210, 50)
@@ -1262,7 +1287,7 @@ class CareKeeperWindow(QMainWindow):
     def _build_patient_header(self, summary: bool) -> QFrame:
         header = QFrame()
         header.setObjectName("ConsoleHeader")
-        header.setMinimumHeight(82)
+        header.setFixedHeight(82)
         layout = QHBoxLayout(header)
         layout.setContentsMargins(18, 10, 14, 10)
         layout.setSpacing(12)
