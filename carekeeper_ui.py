@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QRectF, QThread, QTimer, Qt, Signal
+from PySide6.QtCore import QObject, QRectF, QThread, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPen, QBrush, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -34,6 +34,9 @@ from carekeeper_providers import (
     MeasurementHistoryRecord,
     PatientInfo,
 )
+from carekeeper_retry import SubsystemRegistry
+from carekeeper_queue import QueueDrainWorker, SubmissionQueue
+from carekeeper_logging import log_thread_identity
 
 WINDOW_WIDTH = 1010
 WINDOW_HEIGHT = 503
@@ -114,10 +117,27 @@ class ProviderTask(QThread):
         self.action = action
 
     def run(self) -> None:
+        log_thread_identity(f"ProviderTask:{getattr(self.action, '__name__', self.action)!r}")
         try:
             self.completed.emit(self.action())
         except Exception as exc:
             self.failed.emit(str(exc))
+
+
+class RetryNotifier(QObject):
+    """Bridges retry-attempt/give-up callbacks (fired on worker threads) back
+    to the GUI thread via Qt's standard cross-thread signal delivery."""
+
+    attempt = Signal(str, int, int)
+    give_up = Signal(str, str)
+
+
+class QueueDrainNotifier(QObject):
+    """Bridges the offline-queue background worker's outcomes back to the
+    GUI thread, same cross-thread-signal pattern as RetryNotifier."""
+
+    drain_success = Signal(int)
+    drain_failure = Signal(int, str)
 
 class WifiIndicator(QWidget):
     clicked = Signal()
@@ -325,6 +345,15 @@ class PopupOverlay(QWidget):
     def mousePressEvent(self, event) -> None:
         self.hide()
 
+_SUBSYSTEM_LABELS = {
+    "wifi": "Wi-Fi",
+    "bluetooth": "Bluetooth",
+    "bp_monitor": "เครื่องวัดความดัน",
+    "spo2": "เครื่องวัดออกซิเจน",
+    "idcard": "เครื่องอ่านบัตร",
+}
+
+
 class CareKeeperWindow(QMainWindow):
     def __init__(self, provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
         super().__init__()
@@ -336,6 +365,25 @@ class CareKeeperWindow(QMainWindow):
         self.status_task: ProviderTask | None = None
         self.network_task: ProviderTask | None = None
         self.bp_cooldown_seconds = 0
+
+        self.retry_notifier = RetryNotifier()
+        self.retry_notifier.attempt.connect(self._on_retry_attempt)
+        self.retry_notifier.give_up.connect(self._on_retry_giveup)
+        self.provider.on_retry_attempt = lambda s, a, m: self.retry_notifier.attempt.emit(s, a, m)
+        self.provider.on_retry_giveup = lambda s, r: self.retry_notifier.give_up.emit(s, r)
+
+        self.submission_queue = SubmissionQueue()
+        self.queue_notifier = QueueDrainNotifier()
+        self.queue_notifier.drain_success.connect(self._on_queue_drain_success)
+        self.queue_notifier.drain_failure.connect(self._on_queue_drain_failure)
+        self.queue_worker = QueueDrainWorker(
+            queue=self.submission_queue,
+            send_fn=self.provider.send_data,
+            is_online_fn=getattr(self.provider, "_is_wifi_connected", lambda: True),
+            on_drain_success=lambda row_id: self.queue_notifier.drain_success.emit(row_id),
+            on_drain_failure=lambda row_id, err: self.queue_notifier.drain_failure.emit(row_id, err),
+        )
+        self.queue_worker.start()
 
         self.setWindowTitle(f"CareKeeper - {mode_name}")
         self.setWindowFlag(Qt.FramelessWindowHint, True)
@@ -359,6 +407,10 @@ class CareKeeperWindow(QMainWindow):
 
         self.cooldown_timer = QTimer(self)
         self.cooldown_timer.timeout.connect(self._bp_cooldown_tick)
+
+    def closeEvent(self, event) -> None:
+        self.queue_worker.stop()
+        super().closeEvent(event)
 
     def _build_toast(self) -> None:
         self.toast = ToastLabel(self)
@@ -569,6 +621,9 @@ class CareKeeperWindow(QMainWindow):
         if self.network_task and self.network_task.isRunning():
             self._show_toast("กำลังสแกนหรือเชื่อมต่อเครือข่ายอยู่", success=False, duration_ms=1800)
             return
+        if SubsystemRegistry.get("wifi").disabled:
+            SubsystemRegistry.get("wifi").enable()
+            self._show_toast("กำลังลองเชื่อมต่อ Wi-Fi ใหม่...", success=True, duration_ms=1500)
         self._show_toast("กำลังสแกน Wi-Fi...", success=True, duration_ms=1200)
         self._start_network_task(self.provider.scan_wifi_networks, self._on_wifi_scan_done, self._on_wifi_action_failed)
 
@@ -598,6 +653,9 @@ class CareKeeperWindow(QMainWindow):
         if self.network_task and self.network_task.isRunning():
             self._show_toast("กำลังสแกนหรือเชื่อมต่ออุปกรณ์อยู่", success=False, duration_ms=1800)
             return
+        if SubsystemRegistry.get("bluetooth").disabled:
+            SubsystemRegistry.get("bluetooth").enable()
+            self._show_toast("กำลังลองเชื่อมต่อ Bluetooth ใหม่...", success=True, duration_ms=1500)
         self._show_toast("กำลังสแกน Bluetooth...", success=True, duration_ms=1200)
         self._start_network_task(
             self.provider.scan_bluetooth_devices,
@@ -635,6 +693,21 @@ class CareKeeperWindow(QMainWindow):
 
     def _on_bluetooth_action_failed(self, message: str) -> None:
         self._show_toast(f"Bluetooth: {message}", success=False, duration_ms=3000)
+
+    def _on_retry_attempt(self, subsystem: str, attempt: int, max_attempts: int) -> None:
+        label = _SUBSYSTEM_LABELS.get(subsystem, subsystem)
+        self._show_toast(f"{label}: กำลังลองใหม่ ({attempt}/{max_attempts})", success=False, duration_ms=1800)
+
+    def _on_retry_giveup(self, subsystem: str, reason: str) -> None:
+        label = _SUBSYSTEM_LABELS.get(subsystem, subsystem)
+        self._show_toast(f"{label}: ปิดใช้งานชั่วคราวหลังลองใหม่ไม่สำเร็จ", success=False, duration_ms=3000)
+        self._request_device_status()
+
+    def _on_queue_drain_success(self, row_id: int) -> None:
+        self._show_toast("ส่งข้อมูลที่ค้างอยู่สำเร็จแล้ว", success=True, duration_ms=2000)
+
+    def _on_queue_drain_failure(self, row_id: int, error: str) -> None:
+        pass  # silent retry on next poll cycle, avoid toast spam while offline
 
     def _show_summary(self) -> None:
         self._refresh_values()
@@ -758,12 +831,38 @@ class CareKeeperWindow(QMainWindow):
         for bt, wifi, battery, battery_text, bt_text, wifi_text in getattr(self, "_status_widgets", []):
             battery_text.setText(f"{result.battery_percent}%")
             battery.set_percent(result.battery_percent)
-            wifi.set_connected(result.wifi_connected)
-            bt.set_connected(result.bluetooth_connected)
-            bt_text.setText("CONNECTED" if result.bluetooth_connected else "OFF")
-            wifi_text.setText("ON" if result.wifi_connected else "OFF")
+            wifi.set_connected(result.wifi_connected and not result.wifi_disabled)
+            bt.set_connected(result.bluetooth_connected and not result.bluetooth_disabled)
+            bt_text.setText(
+                "ปิดใช้งาน" if result.bluetooth_disabled
+                else ("CONNECTED" if result.bluetooth_connected else "OFF")
+            )
+            wifi_text.setText(
+                "ปิดใช้งาน" if result.wifi_disabled
+                else ("ON" if result.wifi_connected else "OFF")
+            )
+
+        if hasattr(self, "btn_bp") and self.bp_cooldown_seconds == 0:
+            if result.bp_disabled:
+                self._set_measure_button(self.btn_bp, "BtnNIBPDisabled", "ปิดใช้งาน\nความดัน", True)
+            elif self.btn_bp.objectName() == "BtnNIBPDisabled":
+                self._set_measure_button(self.btn_bp, "BtnNIBP", "เริ่มวัดค่า\nความดัน", True)
+
+        if hasattr(self, "btn_spo2"):
+            if result.spo2_disabled:
+                self._set_measure_button(self.btn_spo2, "BtnSpO2Disabled", "ปิดใช้งาน\nออกซิเจน", True)
+            elif self.btn_spo2.objectName() == "BtnSpO2Disabled":
+                self._set_measure_button(self.btn_spo2, "BtnSpO2Console", "เริ่มวัดค่า\nออกซิเจน", True)
+
+        if hasattr(self, "btn_card"):
+            if result.idcard_disabled:
+                self.btn_card.setText("ปิดใช้งาน (กดเพื่อลองใหม่)")
+            elif self.btn_card.text() == "ปิดใช้งาน (กดเพื่อลองใหม่)":
+                self.btn_card.setText("อ่านข้อมูลบัตร")
 
     def _read_card(self) -> None:
+        if SubsystemRegistry.get("idcard").disabled:
+            SubsystemRegistry.get("idcard").enable()
         self.btn_card.setText("กำลังอ่านข้อมูลบัตร...")
         self.btn_card.setEnabled(False)
         self._set_system_message("กำลังอ่านข้อมูลจากบัตรประชาชน", success=None)
@@ -1461,6 +1560,8 @@ class CareKeeperWindow(QMainWindow):
     def _measure_bp(self) -> None:
         if self.bp_cooldown_seconds > 0:
             return
+        if SubsystemRegistry.get("bp_monitor").disabled:
+            SubsystemRegistry.get("bp_monitor").enable()
         self._set_measure_button(self.btn_bp, "BtnNIBPBusy", "กำลังวัด\nความดัน", False)
         self._set_system_message("กำลังวัดความดันโลหิต", success=None)
         self._start_task(self.provider.measure_blood_pressure, self._on_bp_done, self._on_bp_failed)
@@ -1501,6 +1602,8 @@ class CareKeeperWindow(QMainWindow):
         self._show_popup(f"วัดความดันไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_spo2(self) -> None:
+        if SubsystemRegistry.get("spo2").disabled:
+            SubsystemRegistry.get("spo2").enable()
         self._set_measure_button(self.btn_spo2, "BtnSpO2Busy", "กำลังวัด\nออกซิเจน", False)
         self._set_system_message("กำลังวัดออกซิเจนในเลือด", success=None)
         self._start_task(self.provider.measure_spo2, self._on_spo2_done, self._on_spo2_failed)
@@ -1622,11 +1725,22 @@ class CareKeeperWindow(QMainWindow):
         self.btn_finish.setText("กำลังบันทึกข้อมูล...")
         self.btn_finish.setEnabled(False)
         self._set_system_message("กำลังส่งข้อมูลเข้าสู่ระบบ", success=None)
+
+        # Enqueue immediately (fast local disk write) so the measurement is
+        # never lost even if the immediate send below fails. The background
+        # QueueDrainWorker guarantees eventual delivery either way.
+        row_id = self.submission_queue.enqueue(payload)
         self._start_task(
-            lambda: self.provider.send_data(payload),
+            lambda: self._try_immediate_send(row_id, payload),
             self._on_submit_success,
             self._on_submit_failed,
         )
+
+    def _try_immediate_send(self, row_id: int, payload: dict) -> bool:
+        ok = self.provider.send_data(payload)
+        if ok:
+            self.submission_queue.mark_sent_and_delete(row_id)
+        return ok
 
     def _on_submit_success(self, result: object) -> None:
         self.btn_finish.setEnabled(True)
@@ -1636,10 +1750,14 @@ class CareKeeperWindow(QMainWindow):
         QTimer.singleShot(2000, self._reset_session)
 
     def _on_submit_failed(self, message: str) -> None:
+        # Data is already safely queued (mark_failed leaves it pending) — the
+        # background QueueDrainWorker will retry it, so the operator can
+        # proceed immediately instead of waiting around for the network.
         self.btn_finish.setEnabled(True)
         self.btn_finish.setText("บันทึกข้อมูล  >")
-        self._set_system_message(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False)
-        self._show_popup(f"ส่งข้อมูลไม่สำเร็จ: {message}", success=False, duration_ms=3000)
+        self._set_system_message("เครือข่ายขัดข้อง ข้อมูลถูกบันทึกไว้และจะส่งอัตโนมัติ", success=False)
+        self._show_popup("ส่งข้อมูลไม่สำเร็จ ระบบจะลองส่งใหม่อัตโนมัติ", success=False, duration_ms=3000)
+        QTimer.singleShot(2000, self._reset_session)
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(build_stylesheet(APP_FONT_FAMILY, NUMBER_FONT_FAMILY))
@@ -1648,6 +1766,7 @@ def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
     global APP_FONT_FAMILY, NUMBER_FONT_FAMILY
 
     app = QApplication(sys.argv)
+    log_thread_identity("main")
     APP_FONT_FAMILY = _load_app_font(app)
     NUMBER_FONT_FAMILY = _load_number_font()
     window = CareKeeperWindow(provider, mode_name=mode_name)

@@ -311,6 +311,14 @@ QPushButton#BtnNIBPFail, QPushButton#BtnSpO2Fail, QPushButton#BtnTempFail {
     font-size: 18px;
     font-weight: 900;
 }
+QPushButton#BtnNIBPDisabled, QPushButton#BtnSpO2Disabled {
+    background: #1f2937;
+    color: #94a3b8;
+    border: 1px solid #334155;
+    border-radius: 18px;
+    font-size: 18px;
+    font-weight: 900;
+}
 QPushButton#BtnNIBPBusy:disabled {
     background: #9f9700;
     color: #050505;

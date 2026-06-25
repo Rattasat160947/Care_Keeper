@@ -11,6 +11,9 @@ import uuid
 import requests
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
+
+from carekeeper_retry import retry_with_notify, retry_with_notify_async, SubsystemRegistry
 
 
 # ยังไม่ได้เอาใส่ .env เพราะจะได้เทสง่าย
@@ -27,6 +30,11 @@ TEST_API_KEY = "test"
 # GET: ดึงประวัติผลวัด 4 รายการล่าสุดของ patient_id/cid นั้น
 TEST_HISTORY_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/health_history"
 TEST_HISTORY_PATIENT_ID_PARAM = "patient_id"
+TEST_HISTORY_MAC_PARAM = "mac"
+
+
+def _subsystem_disabled(name: str) -> bool:
+    return SubsystemRegistry.get(name).disabled
 
 
 
@@ -77,6 +85,11 @@ class DeviceStatus:
     battery_percent: int = 100
     wifi_connected: bool = False
     bluetooth_connected: bool = False
+    wifi_disabled: bool = False
+    bluetooth_disabled: bool = False
+    bp_disabled: bool = False
+    spo2_disabled: bool = False
+    idcard_disabled: bool = False
 
 
 @dataclass
@@ -91,6 +104,9 @@ class MeasurementHistoryRecord:
 
 class CareKeeperProvider:
     """Interface for all data sources used by the GUI."""
+
+    on_retry_attempt: Callable[[str, int, int], None] | None = None
+    on_retry_giveup: Callable[[str, str], None] | None = None
 
     def read_patient(self) -> PatientInfo:
         raise NotImplementedError
@@ -171,6 +187,11 @@ class MockCareKeeperProvider(CareKeeperProvider):
             battery_percent=self._battery_percent,
             wifi_connected=True,
             bluetooth_connected=True,
+            wifi_disabled=_subsystem_disabled("wifi"),
+            bluetooth_disabled=_subsystem_disabled("bluetooth"),
+            bp_disabled=_subsystem_disabled("bp_monitor"),
+            spo2_disabled=_subsystem_disabled("spo2"),
+            idcard_disabled=_subsystem_disabled("idcard"),
         )
 
     def get_measurement_history(self, patient_id: str) -> list[MeasurementHistoryRecord]:
@@ -235,10 +256,23 @@ class RealCareKeeperProvider(CareKeeperProvider):
         self.api_url = api_url or TEST_API_URL
         self.history_api_url = history_api_url or TEST_HISTORY_API_URL
 
+    def _notify_attempt(self, subsystem: str, attempt: int, max_attempts: int) -> None:
+        if self.on_retry_attempt:
+            self.on_retry_attempt(subsystem, attempt, max_attempts)
+
+    def _notify_giveup(self, subsystem: str, reason: str) -> None:
+        if self.on_retry_giveup:
+            self.on_retry_giveup(subsystem, reason)
+
     def read_patient(self) -> PatientInfo:
         from lib.thaiidcard.card import ThaiIDCard
 
-        info = ThaiIDCard().read()
+        info = retry_with_notify(
+            ThaiIDCard().read,
+            subsystem="idcard",
+            on_attempt=lambda a, m: self._notify_attempt("idcard", a, m),
+            on_give_up=lambda r: self._notify_giveup("idcard", r),
+        )
         return PatientInfo(
             cid=info.cid,
             th_name=info.th_name,
@@ -251,8 +285,13 @@ class RealCareKeeperProvider(CareKeeperProvider):
         from lib.bp_monitor import BPMonitor
 
         monitor = BPMonitor(port=self.bp_port, timeout=120)
+        retry_with_notify(
+            monitor.connect,
+            subsystem="bp_monitor",
+            on_attempt=lambda a, m: self._notify_attempt("bp_monitor", a, m),
+            on_give_up=lambda r: self._notify_giveup("bp_monitor", r),
+        )
         try:
-            monitor.connect()
             result = monitor.measure()
         finally:
             monitor.disconnect()
@@ -279,7 +318,15 @@ class RealCareKeeperProvider(CareKeeperProvider):
         reader = SpO2Reader(device, timeout=60)
 
         try:
-            await device.ensure_connected()
+            # max_retries=1 here means each outer attempt makes exactly one
+            # connect try; retry_with_notify_async is the sole source of the
+            # 3-attempts-then-disable count, so the two retry layers don't compound.
+            await retry_with_notify_async(
+                lambda: device.connect(max_retries=1),
+                subsystem="spo2",
+                on_attempt=lambda a, m: self._notify_attempt("spo2", a, m),
+                on_give_up=lambda r: self._notify_giveup("spo2", r),
+            )
             value = await reader.read()
             if value is None:
                 raise RuntimeError("ไม่สามารถอ่านค่า SpO2 ได้")
@@ -297,6 +344,11 @@ class RealCareKeeperProvider(CareKeeperProvider):
             battery_percent=self._read_battery_percent(),
             wifi_connected=self._is_wifi_connected(),
             bluetooth_connected=self._is_bluetooth_connected(),
+            wifi_disabled=_subsystem_disabled("wifi"),
+            bluetooth_disabled=_subsystem_disabled("bluetooth"),
+            bp_disabled=_subsystem_disabled("bp_monitor"),
+            spo2_disabled=_subsystem_disabled("spo2"),
+            idcard_disabled=_subsystem_disabled("idcard"),
         )
 
     def get_measurement_history(self, patient_id: str) -> list[MeasurementHistoryRecord]:
@@ -311,6 +363,7 @@ class RealCareKeeperProvider(CareKeeperProvider):
             self.history_api_url,
             params={
                 TEST_HISTORY_PATIENT_ID_PARAM: patient_id,
+                TEST_HISTORY_MAC_PARAM: self.device_mac,
                 "limit": 4,
             },
             headers=headers,
@@ -422,6 +475,14 @@ class RealCareKeeperProvider(CareKeeperProvider):
             print(f"Failed to toggle WiFi: {e}")
 
     def scan_wifi_networks(self) -> list[str]:
+        return retry_with_notify(
+            self._scan_wifi_networks_once,
+            subsystem="wifi",
+            on_attempt=lambda a, m: self._notify_attempt("wifi", a, m),
+            on_give_up=lambda r: self._notify_giveup("wifi", r),
+        )
+
+    def _scan_wifi_networks_once(self) -> list[str]:
         try:
             output = subprocess.check_output(
                 ["nmcli", "-t", "-f", "SSID", "device", "wifi", "list"],
@@ -441,6 +502,14 @@ class RealCareKeeperProvider(CareKeeperProvider):
             raise RuntimeError(f"ไม่สามารถสแกน Wi-Fi ได้: {e}")
 
     def connect_wifi(self, ssid: str, password: str | None = None) -> bool:
+        return retry_with_notify(
+            lambda: self._connect_wifi_once(ssid, password),
+            subsystem="wifi",
+            on_attempt=lambda a, m: self._notify_attempt("wifi", a, m),
+            on_give_up=lambda r: self._notify_giveup("wifi", r),
+        )
+
+    def _connect_wifi_once(self, ssid: str, password: str | None = None) -> bool:
         command = ["nmcli", "device", "wifi", "connect", ssid]
         if password:
             command.extend(["password", password])
@@ -462,6 +531,14 @@ class RealCareKeeperProvider(CareKeeperProvider):
             print(f"Failed to toggle Bluetooth: {e}")
 
     def scan_bluetooth_devices(self) -> list[tuple[str, str]]:
+        return retry_with_notify(
+            self._scan_bluetooth_devices_once,
+            subsystem="bluetooth",
+            on_attempt=lambda a, m: self._notify_attempt("bluetooth", a, m),
+            on_give_up=lambda r: self._notify_giveup("bluetooth", r),
+        )
+
+    def _scan_bluetooth_devices_once(self) -> list[tuple[str, str]]:
         try:
             subprocess.run(["bluetoothctl", "scan", "on"], timeout=8, capture_output=True, text=True)
         except Exception:
@@ -491,6 +568,14 @@ class RealCareKeeperProvider(CareKeeperProvider):
             raise RuntimeError(f"ไม่สามารถสแกน Bluetooth ได้: {e}")
 
     def connect_bluetooth(self, address: str) -> bool:
+        return retry_with_notify(
+            lambda: self._connect_bluetooth_once(address),
+            subsystem="bluetooth",
+            on_attempt=lambda a, m: self._notify_attempt("bluetooth", a, m),
+            on_give_up=lambda r: self._notify_giveup("bluetooth", r),
+        )
+
+    def _connect_bluetooth_once(self, address: str) -> bool:
         try:
             subprocess.run(["bluetoothctl", "pair", address], timeout=15, capture_output=True, text=True)
             subprocess.run(["bluetoothctl", "trust", address], timeout=10, capture_output=True, text=True)
