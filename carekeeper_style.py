@@ -70,9 +70,9 @@ QLineEdit#ManualCidInput {
     border: 1px solid #334155;
     border-radius: 10px;
     font-family: "__NUMBER_FONT__", "__APP_FONT__", sans-serif;
-    font-size: 28px;
+    font-size: 23px;
     font-weight: 900;
-    min-height: 56px;
+    min-height: 50px;
 }
 QLineEdit#ManualCidInput:focus {
     border: 1px solid #0b7cff;

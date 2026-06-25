@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QVBoxLayout,
     QWidget,
+    QDialogButtonBox, 
 )
 
 from carekeeper_style import build_stylesheet
@@ -496,11 +497,12 @@ class CareKeeperWindow(QMainWindow):
     def _build_numeric_keypad(self, target: QLineEdit) -> QFrame:
         keypad = QFrame()
         keypad.setObjectName("NumericKeypad")
+        keypad.setStyleSheet("QFrame#NumericKeypad { background: transparent; }")
 
         grid = QGridLayout(keypad)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(6)
-        grid.setVerticalSpacing(6)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
 
         keys = [
             ["1", "2", "3"],
@@ -512,22 +514,27 @@ class CareKeeperWindow(QMainWindow):
         for row, key_row in enumerate(keys):
             for col, key in enumerate(key_row):
                 btn = QPushButton(key)
-                btn.setFixedSize(108, 46)
+                btn.setFixedSize(126, 50)
+                btn.setCursor(Qt.PointingHandCursor)
+
                 btn.setStyleSheet(
                     """
                     QPushButton {
-                        background-color: #0f8b8d;
-                        color: #ffffff;
-                        border: none;
-                        border-radius: 12px;
-                        font-size: 24px;
+                        background-color: #101418;
+                        color: #9aff2d;
+                        border: 2px solid #2a343d;
+                        border-radius: 14px;
+                        font-size: 28px;
                         font-weight: 900;
                     }
                     QPushButton:pressed {
-                        background-color: #0b7476;
+                        background-color: #1f2937;
+                        border: 2px solid #9aff2d;
+                        color: #ffffff;
                     }
                     """
                 )
+
                 btn.clicked.connect(lambda checked=False, value=key: self._numeric_key_pressed(target, value))
                 grid.addWidget(btn, row, col)
 
@@ -561,55 +568,70 @@ class CareKeeperWindow(QMainWindow):
     def _styled_input_dialog(self, title: str) -> QInputDialog:
         dialog = QInputDialog(self)
         dialog.setWindowTitle(title)
+        dialog.setWindowFlag(Qt.FramelessWindowHint, True)
         dialog.setMinimumSize(620, 460)
         dialog.setStyleSheet(
             """
-            QInputDialog { background-color: #ffffff; color: #0b1f33; }
-            QLabel { font-size: 22px; font-weight: 700; color: #0b1f33; }
+            QInputDialog {
+                background-color: #050709;
+                color: #f8fafc;
+            }
+
+            QLabel {
+                font-size: 22px;
+                font-weight: 900;
+                color: #f8fafc;
+                background: transparent;
+            }
+
             QComboBox {
                 font-size: 22px;
                 min-height: 56px;
                 padding: 6px 14px;
-                border: 2px solid #9ec9d6;
-                border-radius: 10px;
-                color: #0b1f33;
-                background-color: #ffffff;
+                border: 2px solid #2a343d;
+                border-radius: 12px;
+                color: #f8fafc;
+                background-color: #101418;
             }
+
             QComboBox QAbstractItemView {
                 font-size: 22px;
                 min-height: 50px;
-                color: #0b1f33;
-                background-color: #ffffff;
-                selection-background-color: #d1fae5;
-                selection-color: #0b1f33;
+                color: #f8fafc;
+                background-color: #101418;
+                border: 2px solid #2a343d;
+                selection-background-color: #1f2937;
+                selection-color: #9aff2d;
             }
+
             QInputDialog QLineEdit {
                 font-size: 22px;
                 min-height: 56px;
                 padding: 6px 14px;
-                border: 2px solid #9ec9d6;
-                border-radius: 10px;
-                color: #000000;
-                background-color: #ffffff;
-                selection-background-color: #0b7cff;
-                selection-color: #ffffff;
+                border: 2px solid #2a343d;
+                border-radius: 12px;
+                color: #f8fafc;
+                background-color: #101418;
+                selection-background-color: #9aff2d;
+                selection-color: #050709;
             }
-            QInputDialog QLineEdit:focus {
-                color: #000000;
-                background-color: #ffffff;
-                border: 2px solid #0b7cff;
-            }
+
             QPushButton {
                 font-size: 20px;
-                font-weight: 800;
+                font-weight: 900;
                 min-height: 52px;
                 min-width: 130px;
                 border-radius: 12px;
-                background-color: #0f8b8d;
-                color: #ffffff;
-                border: none;
+                background-color: #101418;
+                color: #9aff2d;
+                border: 2px solid #2a343d;
             }
-            QPushButton:hover { background-color: #0b7476; }
+
+            QPushButton:pressed {
+                background-color: #1f2937;
+                border: 2px solid #9aff2d;
+                color: #ffffff;
+            }
             """
         )
         return dialog
@@ -619,61 +641,92 @@ class CareKeeperWindow(QMainWindow):
         dialog.setComboBoxItems(items)
         dialog.setLabelText(label)
         dialog.setComboBoxEditable(False)
+
+        button_box = dialog.findChild(QDialogButtonBox)
+        if button_box:
+            button_box.setLayoutDirection(Qt.RightToLeft)
+
+            ok_button = button_box.button(QDialogButtonBox.Ok)
+            cancel_button = button_box.button(QDialogButtonBox.Cancel)
+
+            if ok_button:
+                ok_button.setText("ยืนยัน")
+            if cancel_button:
+                cancel_button.setText("ยกเลิก")
+
         ok = bool(dialog.exec())
         return dialog.textValue(), ok
 
     def _ask_password(self, title: str, label: str) -> tuple[str, bool]:
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
+        dialog.setWindowFlag(Qt.FramelessWindowHint, True)
         dialog.setModal(True)
         dialog.setFixedSize(620, 470)
         dialog.setStyleSheet(
             """
             QDialog {
-                background-color: #ffffff;
-                color: #0b1f33;
+                background-color: #050709;
+                color: #f8fafc;
             }
+
             QLabel {
-                font-size: 22px;
-                font-weight: 800;
-                color: #0b1f33;
-            }
-            QLineEdit {
-                font-size: 24px;
-                min-height: 56px;
-                padding: 6px 14px;
-                border: 2px solid #9ec9d6;
-                border-radius: 10px;
-                color: #000000;
-                background-color: #ffffff;
-                selection-background-color: #0b7cff;
-                selection-color: #ffffff;
-            }
-            QPushButton {
                 font-size: 20px;
                 font-weight: 900;
-                min-height: 48px;
-                min-width: 130px;
+                color: #f8fafc;
+                background: transparent;
+            }
+
+            QLineEdit {
+                font-size: 26px;
+                min-height: 56px;
+                padding: 6px 14px;
+                border: 2px solid #2a343d;
                 border-radius: 12px;
-                background-color: #0f8b8d;
+                color: #9aff2d;
+                background-color: #101418;
+                selection-background-color: #9aff2d;
+                selection-color: #050709;
+            }
+
+            QPushButton#BtnConfirmManualCid {
+                background-color: #0b7cff;
                 color: #ffffff;
                 border: none;
+                border-radius: 12px;
+                font-size: 20px;
+                font-weight: 900;
             }
-            QPushButton:pressed {
+
+            QPushButton#BtnConfirmManualCid:pressed {
                 background-color: #0b7476;
+            }
+
+            QPushButton#BtnCancelManualCid {
+                background-color: #101418;
+                color: #f8fafc;
+                border: 2px solid #2a343d;
+                border-radius: 12px;
+                font-size: 20px;
+                font-weight: 900;
+            }
+
+            QPushButton#BtnCancelManualCid:pressed {
+                background-color: #1f2937;
+                border: 2px solid #9aff2d;
             }
             """
         )
 
         layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(32, 28, 32, 28)
-        layout.setSpacing(14)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(10)
 
         title_label = QLabel(label)
         title_label.setAlignment(Qt.AlignCenter)
 
         txt_password = QLineEdit()
-        txt_password.setEchoMode(QLineEdit.Password)
+        # txt_password.setEchoMode(QLineEdit.Password)
         txt_password.setFocusPolicy(Qt.StrongFocus)
         txt_password.setAlignment(Qt.AlignCenter)
         txt_password.setFixedHeight(56)
@@ -685,10 +738,12 @@ class CareKeeperWindow(QMainWindow):
         actions.addStretch(1)
 
         btn_cancel = QPushButton("ยกเลิก")
+        btn_cancel.setObjectName("BtnCancelManualCid")
         btn_cancel.setFixedSize(150, 48)
         btn_cancel.clicked.connect(dialog.reject)
 
-        btn_ok = QPushButton("ตกลง")
+        btn_ok = QPushButton("ยืนยัน")
+        btn_ok.setObjectName("BtnConfirmManualCid")
         btn_ok.setFixedSize(150, 48)
         btn_ok.clicked.connect(dialog.accept)
 
@@ -699,6 +754,7 @@ class CareKeeperWindow(QMainWindow):
         layout.addWidget(title_label)
         layout.addWidget(txt_password)
         layout.addWidget(keypad, alignment=Qt.AlignCenter)
+        layout.addSpacing(4)
         layout.addLayout(actions)
 
         txt_password.setFocus(Qt.OtherFocusReason)
@@ -1167,32 +1223,46 @@ class CareKeeperWindow(QMainWindow):
         self.manual_cid_panel.setObjectName("ManualCidPanel")
         manual_layout = QVBoxLayout(self.manual_cid_panel)
         manual_layout.setContentsMargins(0, 0, 0, 0)
-        manual_layout.setSpacing(12)
+        manual_layout.setSpacing(2)
+
         manual_title = self._console_label(
             "กรุณากรอกเลขบัตรประจำตัวประชาชน 13 หลัก",
             "ManualCidTitle",
             Qt.AlignCenter,
         )
+        manual_title.setWordWrap(True)
+
+        self.manual_cid_panel = QFrame()
+        self.manual_cid_panel.setObjectName("ManualCidPanel")
+        manual_layout = QVBoxLayout(self.manual_cid_panel)
+        manual_layout.setContentsMargins(0, 0, 0, 0)
+        manual_layout.setSpacing(8)
+
         self.txt_manual_cid = QLineEdit()
         self.txt_manual_cid.setObjectName("ManualCidInput")
         self.txt_manual_cid.setFocusPolicy(Qt.StrongFocus)
         self.txt_manual_cid.setMaxLength(17)
         self.txt_manual_cid.setAlignment(Qt.AlignCenter)
         self.txt_manual_cid.setPlaceholderText("0-0000-00000-00-0")
-        self.txt_manual_cid.setFixedWidth(450)
+        self.txt_manual_cid.setFixedWidth(390)
+        self.txt_manual_cid.setFixedHeight(48)
         self.txt_manual_cid.setInputMethodHints(Qt.ImhDigitsOnly)
         self.txt_manual_cid.textChanged.connect(self._format_manual_cid_input)
         self.txt_manual_cid.returnPressed.connect(self._submit_manual_cid)
+
         self.lbl_manual_cid_error = self._console_label("", "ManualCidError", Qt.AlignCenter)
-        self.lbl_manual_cid_error.setFixedHeight(28)
+        self.lbl_manual_cid_error.setFixedHeight(24)
+
         self.btn_confirm_manual_cid = QPushButton("ยืนยันข้อมูล")
         self.btn_confirm_manual_cid.setObjectName("BtnConfirmManualCid")
         self.btn_confirm_manual_cid.setFixedSize(210, 44)
         self.btn_confirm_manual_cid.clicked.connect(self._submit_manual_cid)
+
         self.btn_cancel_manual_cid = QPushButton("ย้อนกลับ")
         self.btn_cancel_manual_cid.setObjectName("BtnCancelManualCid")
         self.btn_cancel_manual_cid.setFixedSize(210, 44)
         self.btn_cancel_manual_cid.clicked.connect(self._hide_manual_cid_entry)
+
         manual_actions = QHBoxLayout()
         manual_actions.setContentsMargins(0, 0, 0, 0)
         manual_actions.setSpacing(12)
@@ -1203,10 +1273,11 @@ class CareKeeperWindow(QMainWindow):
         manual_layout.addWidget(manual_title)
         manual_layout.addWidget(self.txt_manual_cid, alignment=Qt.AlignCenter)
         manual_layout.addWidget(self.lbl_manual_cid_error)
+
         self.manual_cid_keypad = self._build_numeric_keypad(self.txt_manual_cid)
         manual_layout.addWidget(self.manual_cid_keypad, alignment=Qt.AlignCenter)
 
-        manual_layout.addSpacing(12)
+        manual_layout.addSpacing(18)
         manual_layout.addLayout(manual_actions)
 
         # A real top-level dialog (like the Wi-Fi/Bluetooth prompts) so the
@@ -1218,7 +1289,7 @@ class CareKeeperWindow(QMainWindow):
         self.manual_cid_dialog.setFixedSize(620, 470)
         self.manual_cid_dialog.setStyleSheet("QDialog { background-color: #050709; }")
         dialog_layout = QVBoxLayout(self.manual_cid_dialog)
-        dialog_layout.setContentsMargins(32, 28, 32, 28)
+        dialog_layout.setContentsMargins(28, 10, 28, 12)
         dialog_layout.addWidget(self.manual_cid_panel)
 
         card_layout.addStretch(1)
