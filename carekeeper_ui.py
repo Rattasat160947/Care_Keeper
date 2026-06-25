@@ -441,6 +441,70 @@ class CareKeeperWindow(QMainWindow):
         task.failed.connect(lambda message: None)
         task.finished.connect(lambda: self._release_task(task))
         task.start()
+    def _build_numeric_keypad(self, target: QLineEdit) -> QFrame:
+        keypad = QFrame()
+        keypad.setObjectName("NumericKeypad")
+
+        grid = QGridLayout(keypad)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(6)
+
+        keys = [
+            ["1", "2", "3"],
+            ["4", "5", "6"],
+            ["7", "8", "9"],
+            ["C", "0", "<-"],
+        ]
+
+        for row, key_row in enumerate(keys):
+            for col, key in enumerate(key_row):
+                btn = QPushButton(key)
+                btn.setFixedSize(108, 46)
+                btn.setStyleSheet(
+                    """
+                    QPushButton {
+                        background-color: #0f8b8d;
+                        color: #ffffff;
+                        border: none;
+                        border-radius: 12px;
+                        font-size: 24px;
+                        font-weight: 900;
+                    }
+                    QPushButton:pressed {
+                        background-color: #0b7476;
+                    }
+                    """
+                )
+                btn.clicked.connect(lambda checked=False, value=key: self._numeric_key_pressed(target, value))
+                grid.addWidget(btn, row, col)
+
+        return keypad
+
+
+    def _numeric_key_pressed(self, target: QLineEdit, key: str) -> None:
+        if key == "C":
+            target.clear()
+            return
+
+        if key == "<-":
+            if target is getattr(self, "txt_manual_cid", None):
+                digits = "".join(ch for ch in target.text() if ch.isdigit())
+                target.setText(digits[:-1])
+            else:
+                target.backspace()
+            return
+
+        if not key.isdigit():
+            return
+
+        if target is getattr(self, "txt_manual_cid", None):
+            digits = "".join(ch for ch in target.text() if ch.isdigit())
+            if len(digits) >= 13:
+                return
+            target.setText(digits + key)
+        else:
+            target.insert(key)
 
     def _styled_input_dialog(self, title: str) -> QInputDialog:
         dialog = QInputDialog(self)
@@ -507,23 +571,88 @@ class CareKeeperWindow(QMainWindow):
         return dialog.textValue(), ok
 
     def _ask_password(self, title: str, label: str) -> tuple[str, bool]:
-        dialog = self._styled_input_dialog(title)
-        dialog.setLabelText(label)
-        dialog.setTextEchoMode(QLineEdit.Password)
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setModal(True)
+        dialog.setFixedSize(620, 470)
+        dialog.setStyleSheet(
+            """
+            QDialog {
+                background-color: #ffffff;
+                color: #0b1f33;
+            }
+            QLabel {
+                font-size: 22px;
+                font-weight: 800;
+                color: #0b1f33;
+            }
+            QLineEdit {
+                font-size: 24px;
+                min-height: 56px;
+                padding: 6px 14px;
+                border: 2px solid #9ec9d6;
+                border-radius: 10px;
+                color: #000000;
+                background-color: #ffffff;
+                selection-background-color: #0b7cff;
+                selection-color: #ffffff;
+            }
+            QPushButton {
+                font-size: 20px;
+                font-weight: 900;
+                min-height: 48px;
+                min-width: 130px;
+                border-radius: 12px;
+                background-color: #0f8b8d;
+                color: #ffffff;
+                border: none;
+            }
+            QPushButton:pressed {
+                background-color: #0b7476;
+            }
+            """
+        )
 
-        def focus_password_input() -> None:
-            dialog.raise_()
-            dialog.activateWindow()
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(32, 28, 32, 28)
+        layout.setSpacing(14)
 
-            line_edit = dialog.findChild(QLineEdit)
-            if line_edit:
-                line_edit.setFocusPolicy(Qt.StrongFocus)
-                line_edit.setFocus(Qt.OtherFocusReason)
+        title_label = QLabel(label)
+        title_label.setAlignment(Qt.AlignCenter)
 
-        QTimer.singleShot(250, focus_password_input)
+        txt_password = QLineEdit()
+        txt_password.setEchoMode(QLineEdit.Password)
+        txt_password.setFocusPolicy(Qt.StrongFocus)
+        txt_password.setAlignment(Qt.AlignCenter)
+        txt_password.setFixedHeight(56)
+
+        keypad = self._build_numeric_keypad(txt_password)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(12)
+        actions.addStretch(1)
+
+        btn_cancel = QPushButton("ยกเลิก")
+        btn_cancel.setFixedSize(150, 48)
+        btn_cancel.clicked.connect(dialog.reject)
+
+        btn_ok = QPushButton("ตกลง")
+        btn_ok.setFixedSize(150, 48)
+        btn_ok.clicked.connect(dialog.accept)
+
+        actions.addWidget(btn_cancel)
+        actions.addWidget(btn_ok)
+        actions.addStretch(1)
+
+        layout.addWidget(title_label)
+        layout.addWidget(txt_password)
+        layout.addWidget(keypad, alignment=Qt.AlignCenter)
+        layout.addLayout(actions)
+
+        txt_password.setFocus(Qt.OtherFocusReason)
 
         ok = bool(dialog.exec())
-        return dialog.textValue(), ok
+        return txt_password.text(), ok
 
     def _open_power_menu(self) -> None:
         box = QMessageBox(self)
@@ -788,11 +917,7 @@ class CareKeeperWindow(QMainWindow):
         self.manual_cid_dialog.show()
         self.manual_cid_dialog.raise_()
         self.manual_cid_dialog.activateWindow()
-
-        QTimer.singleShot(
-            250,
-            lambda: self.txt_manual_cid.setFocus(Qt.OtherFocusReason),
-        )
+        self.txt_manual_cid.setFocus(Qt.OtherFocusReason)
 
     def _hide_manual_cid_entry(self) -> None:
         self.manual_cid_dialog.hide()
@@ -979,7 +1104,10 @@ class CareKeeperWindow(QMainWindow):
         manual_layout.addWidget(manual_title)
         manual_layout.addWidget(self.txt_manual_cid, alignment=Qt.AlignCenter)
         manual_layout.addWidget(self.lbl_manual_cid_error)
-        manual_layout.addSpacing(18)
+        self.manual_cid_keypad = self._build_numeric_keypad(self.txt_manual_cid)
+        manual_layout.addWidget(self.manual_cid_keypad, alignment=Qt.AlignCenter)
+
+        manual_layout.addSpacing(12)
         manual_layout.addLayout(manual_actions)
 
         # A real top-level dialog (like the Wi-Fi/Bluetooth prompts) so the
@@ -988,7 +1116,7 @@ class CareKeeperWindow(QMainWindow):
         self.manual_cid_dialog = QDialog(self)
         self.manual_cid_dialog.setWindowTitle("กรอกเลขบัตรประชาชน")
         self.manual_cid_dialog.setModal(True)
-        self.manual_cid_dialog.setFixedSize(620, 280)
+        self.manual_cid_dialog.setFixedSize(620, 470)
         self.manual_cid_dialog.setStyleSheet("QDialog { background-color: #050709; }")
         dialog_layout = QVBoxLayout(self.manual_cid_dialog)
         dialog_layout.setContentsMargins(32, 28, 32, 28)
@@ -1677,4 +1805,5 @@ def run_app(provider: CareKeeperProvider, mode_name: str = "Mock") -> None:
     NUMBER_FONT_FAMILY = _load_number_font()
     window = CareKeeperWindow(provider, mode_name=mode_name)
     window.showFullScreen()
+    
     sys.exit(app.exec())
