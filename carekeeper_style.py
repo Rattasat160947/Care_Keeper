@@ -43,14 +43,13 @@ QPushButton#BtnScanCard {
 }
 QPushButton#BtnScanCard:hover { background: #2490ff; }
 QPushButton#BtnScanCard:disabled { background: #1f2937; color: #94a3b8; }
-QPushButton#BtnManualCard {
+QLabel#BtnManualCard {
     background: transparent;
     color: #e5e7eb;
     border: none;
     font-size: 22px;
     font-weight: 900;
 }
-QPushButton#BtnManualCard:hover { color: #79f1ff; }
 QFrame#ManualCidPanel {
     background: transparent;
     border: none;
@@ -448,7 +447,7 @@ QPushButton#BtnSummaryDisabled {
     border-radius: 24px;
 }
 QPushButton#BtnFinish {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 900;
     border-radius: 24px;
 }
