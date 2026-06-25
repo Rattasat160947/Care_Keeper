@@ -79,7 +79,11 @@ Care_Keeper/
 +-- carekeeper_ui.py          # โค้ดหน้าจอหลัก, event, popup, dialog และ flow ของ UI
 +-- carekeeper_style.py       # stylesheet สี ฟอนต์ และรูปแบบองค์ประกอบหน้าจอ
 +-- carekeeper_providers.py   # ชั้นเชื่อมต่อข้อมูล mock / hardware / backend
++-- carekeeper_retry.py       # ระบบ retry + auto-disable subsystem ที่เชื่อมต่อไม่สำเร็จ
++-- carekeeper_queue.py       # คิวส่งข้อมูลออฟไลน์ (SQLite) + worker สำหรับ drain คิวเมื่อออนไลน์
++-- carekeeper_logging.py     # ตั้งค่า logging กลางของระบบ และ log thread identity สำหรับ debug
 +-- requirement.txt           # รายการ Python libraries ที่ต้องติดตั้ง
++-- requirements-dev.txt      # libraries เพิ่มเติมสำหรับรัน test (pytest, pytest-qt, pytest-mock)
 +-- idcard.py                 # ทดสอบอ่านบัตรประชาชนแบบแยกเดี่ยว
 +-- BP.py                     # ทดสอบเครื่องวัดความดันแบบแยกเดี่ยว
 +-- H59_BLE.py                # ทดสอบอุปกรณ์ SpO2 ผ่าน Bluetooth
@@ -87,6 +91,9 @@ Care_Keeper/
 +-- ble_scaner.py             # ทดสอบค้นหา Bluetooth device
 +-- style/                    # ฟอนต์และไฟล์ไอคอนของระบบ
 +-- lib/                      # โมดูลเชื่อมต่ออุปกรณ์จริง
++-- conf/                     # systemd unit/timer สำหรับรันโปรแกรมแบบ kiosk บน Raspberry Pi
++-- data/                     # SQLite ของคิวส่งข้อมูลออฟไลน์ (สร้างเองตอนรัน, ไม่ commit เข้า git)
++-- tests/                    # pytest unit test ของ provider, queue, retry และ UI
 ```
 
 ## การแยกส่วนการทำงานของโค้ด
@@ -142,6 +149,23 @@ Python มีข้อจำกัดเรื่อง Global Interpreter Lock 
 2. คำสั่งระบบ เช่น `nmcli`, `bluetoothctl`, `iwgetid` และ `ip link` ถูกกำหนด timeout เพื่อป้องกันกรณี subprocess ค้างบน Raspberry Pi
 
 ถ้าในอนาคตมีงานที่ใช้ CPU หนัก เช่น ประมวลผลสัญญาณ ECG, วิเคราะห์กราฟแบบ real-time หรือประมวลผลข้อมูลจำนวนมาก ควรแยกออกเป็น process หรือ service แยกจาก GUI แต่สำหรับงานปัจจุบันที่เป็นการอ่านอุปกรณ์และรอผลลัพธ์ การใช้ `QThread` ร่วมกับ timeout ถือว่าเพียงพอและเหมาะกับการใช้งานบน Raspberry Pi
+
+## ระบบ Retry และ Auto-disable อุปกรณ์ (`carekeeper_retry.py`)
+
+อุปกรณ์จริง (บัตรประชาชน, ความดัน, SpO2) เชื่อมต่อผ่าน serial/BLE ซึ่งหลุดหรือไม่พร้อมได้บ่อย ระบบจึงห่อการเรียกอุปกรณ์แต่ละครั้งด้วย `retry_with_notify` (และ `retry_with_notify_async` สำหรับ BLE)
+
+- พยายามเรียกซ้ำสูงสุด 3 ครั้ง (ปรับได้) แบบ linear backoff ระหว่าง attempt
+- มี `SubsystemRegistry` เก็บสถานะของแต่ละอุปกรณ์ (`wifi`, `bluetooth`, `idcard`, `bp_monitor`, `spo2`) เป็น process-wide singleton
+- ถ้าครบจำนวนครั้งแล้วยังไม่สำเร็จ subsystem นั้นจะถูก `disable()` และ UI จะอัปเดตสถานะ/ปุ่มให้ผู้ใช้เห็นว่าอุปกรณ์นี้ใช้งานไม่ได้ชั่วคราว
+- รอบถัดไปที่ผู้ใช้กดใช้งานอุปกรณ์นั้นอีกครั้ง ระบบจะ `enable()` กลับมาลองใหม่โดยอัตโนมัติ
+
+## คิวส่งข้อมูลออฟไลน์ (`carekeeper_queue.py`)
+
+เพื่อรองรับกรณีอินเทอร์เน็ต/Wi-Fi หลุดตอนกดบันทึกผลตรวจ ระบบมี `SubmissionQueue` ซึ่งเป็นคิวแบบ FIFO เก็บลง SQLite ที่ `data/carekeeper_queue.db`
+
+- เมื่อส่งข้อมูลไป Backend ไม่สำเร็จ payload จะถูก `enqueue()` ลงไฟล์แทนการทิ้งข้อมูล จึงรอดจากการปิด/รีสตาร์ทโปรแกรม
+- `QueueDrainWorker` เป็น background thread ที่ poll คิวทุก 5 วินาที ถ้า Wi-Fi กลับมาออนไลน์ (เช็คผ่าน `is_online_fn`) จะส่งรายการที่ค้างอยู่ตามลำดับเดิม ส่งสำเร็จลบทิ้งทันที ส่งไม่สำเร็จเพิ่ม `attempts` แล้วลองใหม่รอบถัดไป
+- ถ้าโปรแกรมถูกปิดกลางคันตอนกำลังส่ง (`status='sending'`) จะถูก reset เป็น `pending` ใหม่ตอนเริ่มโปรแกรมรอบหน้า กันไม่ให้ข้อมูลตกหายแบบเงียบ ๆ
 
 ## โหมดการทำงาน
 
@@ -229,6 +253,22 @@ sudo usermod -aG dialout,bluetooth,i2c $USER
 sudo reboot
 ```
 
+## การปรับแต่งระบบปฏิบัติการบน Raspberry Pi 5 (Kiosk Setup)
+
+นอกจากโค้ด Python แล้ว เครื่องตรวจจริงต้องปรับแต่งฝั่ง OS (Raspberry Pi OS) เพื่อให้บูตขึ้นมาแล้วรันโปรแกรม CareKeeper แบบ kiosk ได้เอง โดยไม่ต้องมีคนนั่ง login/เปิดโปรแกรมเอง งานส่วนนี้ทำนอก repo (แก้ที่ตัวเครื่อง Pi) ยกเว้นไฟล์ตัวอย่าง systemd ที่เก็บไว้ใน `conf/`
+
+| งาน | รายละเอียด | อ้างอิงไฟล์ |
+| --- | --- | --- |
+| Auto-run โปรแกรมตอนบูต | systemd service สั่งรัน `main_real.py` ด้วย Python venv ของ CareKeeper ทันทีที่เข้า graphical target และรอ `pcscd` พร้อมก่อน, ตั้ง `Restart=on-failure` ให้ฟื้นเองถ้าโปรแกรม crash | `conf/carekeeper.service` |
+| Restart เครื่องทุกคืน | timer สั่ง restart service ทุกวันตี 3 เพื่อล้าง memory/cache ไม่ให้สะสมจนเครื่องช้าเมื่อรันต่อเนื่องยาว ๆ | `conf/carekeeper-restart.service`, `conf/carekeeper-restart.timer` |
+| จำกัดขนาด log | ตั้ง `systemd-journald` ให้ใช้ log ได้ไม่เกิน 200MB และเก็บย้อนหลังไม่เกิน 14 วัน กัน disk เต็มจาก log สะสม | `conf/carekeeper-journal.conf` |
+| สิทธิ์เข้าถึงเครื่องอ่านบัตร/USB sensor | เพิ่ม udev rule ให้ USB ของเครื่องอ่านบัตร/อุปกรณ์ sensor เข้าถึงได้โดยไม่ต้องเป็น root (`MODE="0666"`) | ทำที่ `/etc/udev/rules.d/99-thaiidcard.rules` บนตัวเครื่อง |
+| อ่านบัตรได้แม้ไม่มีคน login หน้าจอ | เพิ่ม polkit rule ให้ `pcscd` (PC/SC daemon ของเครื่องอ่านบัตร) อนุญาต client ที่ไม่มี active session ได้ เพราะ kiosk service รันแบบไม่ผูกกับ session ผู้ใช้ที่ login จริง | ทำที่ `/etc/polkit-1/rules.d/50-pcscd.rules` บนตัวเครื่อง |
+| ซ่อน desktop/taskbar ตอน kiosk | แก้ autostart ของ labwc (Wayland compositor บน Raspberry Pi OS รุ่นใหม่) ให้ไม่เปิด file manager/taskbar เหลือไว้แค่สิ่งที่จำเป็น | ทำที่ `/etc/xdg/labwc/autostart` และ `~/.config/labwc/autostart` บนตัวเครื่อง |
+| ซ่อนข้อความ "Welcome to the Raspberry Pi Desktop" ตอนบูต | แทนที่ภาพ splash ของ Plymouth ด้วยพื้นสีเดียวกับพื้นหลัง เพื่อไม่ให้เห็นข้อความ/โลโก้ตอนเปิดเครื่องก่อนเข้าโปรแกรม | แก้ที่ `/usr/share/plymouth/themes/pix/splash.png` บนตัวเครื่อง (มี backup `.png.bak`) |
+
+ลำดับการติดตั้งแบบเต็ม (ตั้งแต่ raspi-config, ติดตั้ง package ระดับ OS, สิทธิ์ user, ไปจนถึง reboot ตรวจสอบ checklist) อยู่ในเอกสารแยก **CareKeeper Pi5 Setup Runbook** ที่ทีมใช้อ้างอิงตอน setup เครื่องใหม่ ควรเก็บไฟล์นี้คู่กับ repo (เช่นใน `docs/`) เพื่อให้ใครตั้งเครื่องใหม่ตามได้โดยไม่ต้องถามทีมเดิม
+
 ## การตั้งค่าอุปกรณ์และ Backend
 
 ค่าทดสอบหลักอยู่ใน `carekeeper_providers.py`
@@ -301,6 +341,11 @@ python ble_scaner.py
 
 ## สิ่งที่ปรับปรุงล่าสุด
 
+- เพิ่มระบบ retry + auto-disable subsystem (`carekeeper_retry.py`) สำหรับบัตรประชาชน, ความดัน, SpO2, Wi-Fi, Bluetooth เวลาเชื่อมต่ออุปกรณ์ไม่สำเร็จ
+- เพิ่มคิวส่งข้อมูลออฟไลน์แบบ SQLite (`carekeeper_queue.py`) พร้อม background worker คอย drain คิวอัตโนมัติเมื่อกลับมาออนไลน์
+- เพิ่ม logging กลางของระบบ (`carekeeper_logging.py`) และ log thread identity เพื่อ debug ปัญหา thread/Qt
+- เพิ่มชุด pytest ครอบคลุม provider, queue, retry, threading และ UI flow หลัก (โฟลเดอร์ `tests/`)
+- เพิ่ม systemd unit/timer สำหรับรันแบบ kiosk, restart เครื่องตอนตี 3 และจำกัดขนาด log บน Raspberry Pi (โฟลเดอร์ `conf/`)
 - เพิ่ม `QThread` สำหรับงาน Wi-Fi/Bluetooth แยกจาก UI และกันไม่ให้สแกน/เชื่อมต่อซ้อนกัน
 - เพิ่ม timeout ให้คำสั่งระบบ `nmcli`, `bluetoothctl`, `iwgetid` และ `ip link` เพื่อลดปัญหาหน้าจอค้างบน Raspberry Pi
 - เปลี่ยนการกรอกเลขบัตรประชาชนเองให้เป็น popup/dialog
@@ -324,11 +369,18 @@ python ble_scaner.py
 4. **ควรทดสอบบน Raspberry Pi หลังแก้ UI ทุกครั้ง**
    เพราะหน้าจอมีขนาดเฉพาะ และ touchscreen/on-screen keyboard อาจแสดงผลต่างจาก Windows
 
-5. **ควรเพิ่มระบบ logging**
-   เพื่อเก็บ error จาก hardware และ backend สำหรับตรวจสอบย้อนหลัง
+5. **log ปัจจุบันยังพิมพ์ไปที่ console เท่านั้น**
+   `carekeeper_logging.py` ตั้ง logging ให้แล้ว แต่ยังไม่ได้เขียนเป็นไฟล์/หมุน log บนตัวเครื่อง ควรต่อเข้ากับ `journald` (มี `conf/carekeeper-journal.conf` จำกัดขนาดไว้แล้ว) หรือเขียนไฟล์ log แยกเพื่อตรวจสอบย้อนหลังได้ง่ายขึ้น
+
+6. **เอกสาร OS setup ยังไม่อยู่ใน repo**
+   ขั้นตอนปรับแต่ง Raspberry Pi 5 (raspi-config, udev, polkit, labwc autostart, Plymouth splash) ปัจจุบันอยู่ในเอกสารแยกนอก repo ควร commit runbook นี้เข้ามาเก็บไว้ใน `docs/` เพื่อให้ตั้งเครื่องใหม่ได้โดยไม่ต้องถามทีมเดิม
 
 ## สรุปสำหรับการนำเสนอ
 
 Care Keeper เป็น GUI สำหรับเครื่องตรวจวัดสัญญาณชีพบน Raspberry Pi ที่ออกแบบให้ผู้ใช้ทั่วไปใช้งานได้ง่าย ระบบเริ่มจากการอ่านข้อมูลบัตรประชาชนหรือกรอกเลขบัตรเอง จากนั้นเข้าสู่หน้าวัดค่าสัญญาณชีพ แสดงค่าความดันโลหิต ชีพจร SpO2 และอุณหภูมิ ก่อนสรุปผลและส่งข้อมูลไปยัง Backend
 
-โครงสร้างโปรแกรมแยกส่วน UI ออกจาก provider ทำให้สามารถทดสอบด้วย mock data ได้ และสามารถเชื่อมต่ออุปกรณ์จริงบน Raspberry Pi ได้โดยใช้ provider อีกชุดหนึ่ง ปัจจุบันส่วนอ่านบัตร ความดัน SpO2 แบตเตอรี่ Wi-Fi Bluetooth และการส่ง Backend มีทางเชื่อมต่อแล้ว ส่วนที่ยังต้องพัฒนาต่อคือโมดูลวัดอุณหภูมิจริง และ API สำหรับดึงข้อมูลย้อนหลังจาก cloud
+โครงสร้างโปรแกรมแยกส่วน UI ออกจาก provider ทำให้สามารถทดสอบด้วย mock data ได้ และสามารถเชื่อมต่ออุปกรณ์จริงบน Raspberry Pi ได้โดยใช้ provider อีกชุดหนึ่ง ปัจจุบันส่วนอ่านบัตร ความดัน SpO2 แบตเตอรี่ Wi-Fi Bluetooth และการส่ง Backend มีทางเชื่อมต่อแล้ว และมีชั้นความทนทานเพิ่มเข้ามา ได้แก่ ระบบ retry + auto-disable อุปกรณ์ที่เชื่อมต่อไม่สำเร็จ และคิวส่งข้อมูลแบบออฟไลน์ที่ค้างไว้ในเครื่องจนกว่าจะส่งสำเร็จ พร้อมชุด pytest ครอบคลุม provider/queue/retry/UI หลัก
+
+นอกจากโค้ดแอป ยังมีงานฝั่ง OS บน Raspberry Pi 5 เพื่อให้เครื่องบูตเข้าโปรแกรมแบบ kiosk ได้เอง เช่น systemd service/timer สำหรับ auto-run และ restart เครื่องตอนตี 3, จำกัดขนาด log, ปรับสิทธิ์ udev ให้เครื่องอ่านบัตร, แก้ polkit ให้ `pcscd` ใช้งานได้แม้ไม่มี session login, ซ่อน taskbar/file manager ผ่าน labwc autostart และซ่อนข้อความตอนบูตของ Plymouth — รายละเอียดอยู่ในหัวข้อ "การปรับแต่งระบบปฏิบัติการบน Raspberry Pi 5" ด้านบน
+
+ส่วนที่ยังต้องพัฒนาต่อคือโมดูลวัดอุณหภูมิจริง, API สำหรับดึงข้อมูลย้อนหลังจาก cloud, การเขียน log ลงไฟล์/journald อย่างเป็นระบบ และการนำเอกสาร OS setup runbook เข้ามาเก็บไว้ใน repo
