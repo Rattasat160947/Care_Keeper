@@ -18,9 +18,16 @@ TEST_DEVICE_MAC = "11.11.11.11"
 TEST_BP_PORT = "/dev/ttyUSB0"
 TEST_H59_DEVICE_NAME = "H59_D105"
 TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
+# POST: บันทึกผลวัด
 TEST_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/add_health"
 TEST_API_KEY_HEADER = "api-key"
 TEST_API_KEY = "test"
+
+# รอ backend ส่ง endpoint GET history จริง
+# GET: ดึงประวัติผลวัด 4 รายการล่าสุดของ patient_id/cid นั้น
+TEST_HISTORY_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/health_history"
+TEST_HISTORY_PATIENT_ID_PARAM = "patient_id"
+
 
 
 def read_device_mac() -> str:
@@ -219,12 +226,14 @@ class RealCareKeeperProvider(CareKeeperProvider):
         h59_device_name: str | None = None,
         h59_device_address: str | None = None,
         api_url: str | None = None,
+        history_api_url: str | None = None,
     ) -> None:
         self.device_mac = read_device_mac()
         self.bp_port = bp_port or TEST_BP_PORT
         self.h59_device_name = h59_device_name or TEST_H59_DEVICE_NAME
         self.h59_device_address = h59_device_address or TEST_H59_DEVICE_ADDRESS
         self.api_url = api_url or TEST_API_URL
+        self.history_api_url = history_api_url or TEST_HISTORY_API_URL
 
     def read_patient(self) -> PatientInfo:
         from lib.thaiidcard.card import ThaiIDCard
@@ -291,8 +300,63 @@ class RealCareKeeperProvider(CareKeeperProvider):
         )
 
     def get_measurement_history(self, patient_id: str) -> list[MeasurementHistoryRecord]:
-        # TODO: replace this with the real cloud GET endpoint when the backend is ready.
-        return []
+        if not self.history_api_url:
+            return []
+
+        headers = {"Content-Type": "application/json"}
+        if TEST_API_KEY:
+            headers[TEST_API_KEY_HEADER] = TEST_API_KEY
+
+        response = requests.get(
+            self.history_api_url,
+            params={
+                TEST_HISTORY_PATIENT_ID_PARAM: patient_id,
+                "limit": 4,
+            },
+            headers=headers,
+            timeout=8,
+        )
+
+        if not (200 <= response.status_code < 300):
+            raise RuntimeError(f"ดึงข้อมูลย้อนหลังไม่สำเร็จ Status Code: {response.status_code}")
+
+        raw = response.json()
+
+        if isinstance(raw, dict):
+            items = raw.get("data") or raw.get("records") or raw.get("history") or []
+        elif isinstance(raw, list):
+            items = raw
+        else:
+            items = []
+
+        records: list[MeasurementHistoryRecord] = []
+
+        for item in items[:4]:
+            if not isinstance(item, dict):
+                continue
+
+            records.append(
+                MeasurementHistoryRecord(
+                    measured_at=(
+                        item.get("measured_at")
+                        or item.get("date")
+                        or item.get("created_at")
+                        or "-"
+                    ),
+                    systolic=item.get("sys") if item.get("sys") is not None else item.get("systolic"),
+                    diastolic=item.get("dia") if item.get("dia") is not None else item.get("diastolic"),
+                    pulse=(
+                        item.get("pulse")
+                        if item.get("pulse") is not None
+                        else item.get("pr_bpm") if item.get("pr_bpm") is not None
+                        else item.get("heart_rate")
+                    ),
+                    spo2=item.get("spo2"),
+                    temperature=item.get("temperature") if item.get("temperature") is not None else item.get("temp"),
+                )
+            )
+
+        return records
 
     def _read_battery_percent(self) -> int:
         try:

@@ -41,9 +41,6 @@ PROJECT_DIR = Path(__file__).resolve().parent
 STYLE_DIR = PROJECT_DIR / "style"
 APP_FONT_FAMILY = "Noto Sans Thai"
 NUMBER_FONT_FAMILY = "Asimov-MwEn"
-ICON_BLOOD_PRESSURE = "heart-pulse-svgrepo-com.svg"
-ICON_SPO2 = "rain-drops-svgrepo-com.svg"
-ICON_TEMPERATURE = "thermometer-5-svgrepo-com.svg"
 
 def _style_asset(name: str) -> Path:
     return STYLE_DIR / name
@@ -142,7 +139,7 @@ class WifiIndicator(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
+        painter.scale(self.scale, self.scale)
 
         color = QColor("#75efff") if self.connected else QColor("#7c92a4")
         cx = 26 / 2  # ล็อกพิกัดเดิมไว้ไม่ให้เพี้ยน
@@ -179,8 +176,7 @@ class BluetoothIndicator(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
-
+        painter.scale(self.scale, self.scale)
         color = QColor("#75efff") if self.connected else QColor("#7c92a4")
         painter.setPen(QPen(color, 1.8, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.drawLine(10, 3, 10, 17)
@@ -203,8 +199,7 @@ class BatteryIndicator(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.scale(self.scale, self.scale) # <--- สั่งขยายภาพวาด
-
+        painter.scale(self.scale, self.scale)
         border = QColor("#16324f")
         fill = QColor("#75efff") if self.percent > 20 else QColor("#7c92a4")
         painter.setPen(QPen(border, 1.2))
