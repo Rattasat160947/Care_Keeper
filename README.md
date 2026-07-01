@@ -271,18 +271,33 @@ sudo reboot
 
 ## การตั้งค่าอุปกรณ์และ Backend
 
-ค่าทดสอบหลักอยู่ใน `carekeeper_providers.py`
+ค่าทดสอบหลักย้ายออกไปไว้ในไฟล์ `.env` แล้ว โดยมีตัวอย่างอยู่ที่ `.env.example`
 
-```python
-TEST_BP_PORT = "/dev/ttyUSB0"
-TEST_H59_DEVICE_NAME = "H59_D105"
-TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
-TEST_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/add_health"
-TEST_API_KEY_HEADER = "api-key"
-TEST_API_KEY = "test"
+สร้างไฟล์ `.env` จากตัวอย่าง
+
+```bash
+cp .env.example .env
 ```
 
-หากเปลี่ยนอุปกรณ์จริง เช่น serial port ของเครื่องวัดความดัน หรือ Bluetooth address ของเครื่อง SpO2 ให้แก้ค่าที่ส่วนนี้ก่อนรัน `main_real.py`
+จากนั้นแก้ค่าตามอุปกรณ์หรือ Backend จริง
+
+```env
+CAREKEEPER_API_URL=https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/add_health
+CAREKEEPER_API_KEY_HEADER=api-key
+CAREKEEPER_API_KEY=test
+
+CAREKEEPER_HISTORY_API_URL=https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/health_history
+CAREKEEPER_HISTORY_PATIENT_ID_PARAM=patient_id
+CAREKEEPER_HISTORY_MAC_PARAM=mac
+
+CAREKEEPER_BP_PORT=/dev/ttyUSB0
+CAREKEEPER_H59_DEVICE_NAME=H59_D105
+CAREKEEPER_H59_DEVICE_ADDRESS=EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D
+```
+
+หากเปลี่ยนอุปกรณ์จริง เช่น serial port ของเครื่องวัดความดัน หรือ Bluetooth address ของเครื่อง SpO2 ให้แก้ค่าใน `.env` ก่อนรัน `main_real.py` โดยไม่ต้องแก้โค้ดใน `carekeeper_providers.py`
+
+หมายเหตุ: ไฟล์ `.env` ถูกใส่ไว้ใน `.gitignore` แล้ว เพื่อป้องกัน API key หรือค่าลับหลุดเข้า git ส่วน `.env.example` สามารถ commit ได้ เพราะเป็นไฟล์ตัวอย่าง
 
 ## รูปแบบข้อมูลที่ส่งไป Backend
 
@@ -290,7 +305,7 @@ TEST_API_KEY = "test"
 
 ```json
 {
-  "mac": "11.11.11.11",
+  "mac": "1c:ce:51:9a:34:77",
   "spo2": 98,
   "heart_rate": 70,
   "pr_bpm": 70,
@@ -302,10 +317,10 @@ TEST_API_KEY = "test"
 
 หมายเหตุ:
 
-- `mac` จะพยายามอ่านจาก MAC address ของ Raspberry Pi ก่อน
+- `mac` อ่านจาก MAC address ของ Raspberry Pi อัตโนมัติ ไม่ต้องตั้งค่าใน `.env`
 - `heart_rate`, `pr_bpm` และ `pulse` ใช้ค่าชีพจรชุดเดียวกันตามรูปแบบ API ปัจจุบัน
-- API key ปัจจุบันเป็นค่าทดสอบ `test`
-- หากใช้งานจริงควรย้ายค่า API URL และ API key ไปไว้ใน `.env` หรือ configuration ที่ปลอดภัยกว่า
+- API key อ่านจาก `CAREKEEPER_API_KEY` ในไฟล์ `.env`
+- ค่า API URL, API key และค่าของอุปกรณ์จริงไม่จำเป็นต้องแก้ในโค้ดแล้ว
 
 ## การจัดการข้อผิดพลาด
 
@@ -316,14 +331,17 @@ TEST_API_KEY = "test"
 | อ่านบัตรไม่สำเร็จ | เปิด popup กรอกเลขบัตรเอง และแสดงข้อความผิดพลาด |
 | กรอกเลขบัตรไม่ครบ | แสดงข้อความใน popup และ toast แจ้งเตือน |
 | กรอกตัวอักษร/ภาษาไทยในเลขบัตร | แสดงข้อความให้กรอกเฉพาะตัวเลข 0-9 |
-| วัดความดันไม่สำเร็จ | ปุ่มเปลี่ยนเป็นสถานะวัดไม่สำเร็จและแสดง toast |
-| วัด SpO2 ไม่สำเร็จ | ปุ่มเปลี่ยนเป็นสถานะวัดไม่สำเร็จและแสดง toast |
-| วัดอุณหภูมิไม่สำเร็จ | ปุ่มเปลี่ยนเป็นสถานะวัดไม่สำเร็จและแสดง toast |
-| ส่งข้อมูล Backend ไม่สำเร็จ | แสดงข้อความผิดพลาดและให้กดบันทึกใหม่ |
+| วัดความดันไม่สำเร็จ | ปุ่มเปลี่ยนเป็นสถานะวัดไม่สำเร็จและแสดง system message |
+| วัด SpO2 ไม่สำเร็จ | ปุ่มเปลี่ยนเป็นสถานะวัดไม่สำเร็จและแสดง system message |
+| วัดอุณหภูมิไม่สำเร็จ | ปุ่มเปลี่ยนเป็นสถานะวัดไม่สำเร็จและแสดง system message |
+| ส่งข้อมูล Backend ไม่สำเร็จ | แสดงข้อความผิดพลาด เก็บข้อมูลไว้ใน offline queue และให้ระบบลองส่งใหม่อัตโนมัติ |
 | โหลดข้อมูลย้อนหลังไม่สำเร็จ | แสดงข้อความในตารางข้อมูลย้อนหลัง |
 | Wi-Fi/Bluetooth เชื่อมต่อไม่สำเร็จ | แสดง toast แจ้งเตือน |
+| อ่านสถานะ Wi-Fi/Bluetooth/แบตเตอรี่ไม่ได้ | แสดง toast แบบจำกัดความถี่ และระบบจะลองอ่านใหม่อัตโนมัติ |
+| ส่งข้อมูลที่ค้างใน offline queue ไม่สำเร็จ | แสดง toast แบบจำกัดความถี่ และ background worker จะลองส่งใหม่ |
+| อ่านค่าแบตเตอรี่ไม่ได้ | แสดง `--%` แทน `0%` เพื่อไม่ให้เข้าใจผิดว่าแบตเตอรี่หมด |
 
-ข้อสังเกต: การตรวจสถานะ Wi-Fi/Bluetooth/แบตเตอรี่ที่ทำงานเป็นรอบ ๆ จะไม่ popup รบกวนผู้ใช้ทุกครั้งหากอ่านสถานะไม่ได้ เพื่อไม่ให้หน้าจอเด้งเตือนซ้ำระหว่างใช้งาน
+ข้อสังเกต: toast ปัจจุบันเป็นกล่องแจ้งเตือนตรงกลางหน้าจอเพื่อให้อ่านง่ายและไม่ทับ footer ส่วนการตรวจสถานะ Wi-Fi/Bluetooth/แบตเตอรี่กับการ drain offline queue จะจำกัดความถี่การแจ้งเตือน เพื่อไม่ให้หน้าจอเด้งเตือนซ้ำระหว่างใช้งาน
 
 ## การทดสอบอุปกรณ์แยกเดี่ยว
 
@@ -352,6 +370,11 @@ python ble_scaner.py
 - เพิ่มการแจ้งเตือนเมื่อผู้ใช้กรอกตัวอักษรหรือภาษาอื่นในช่องเลขบัตร
 - ปรับช่องกรอกรหัสผ่านของ Wi-Fi ให้ตัวอักษรเป็นสีดำ มองเห็นได้บนพื้นหลังสีขาว
 - ปรับข้อมูลย้อนหลังเป็นตาราง 4 รายการล่าสุด ไม่ใช้ scroll เพื่อให้เหมาะกับหน้าจอ Raspberry Pi
+- ย้าย API URL, API key และค่าของอุปกรณ์หลักไปอ่านจาก `.env` โดยมี `.env.example` เป็นไฟล์ตัวอย่าง
+- เอาค่า MAC address ออกจาก config เพราะระบบอ่านจากเครื่องจริงได้อัตโนมัติแล้ว
+- ปรับ toast ให้เป็นกล่องแจ้งเตือนตรงกลางหน้าจอ ไม่ทับ footer และเพิ่ม feedback กรณีโหลด history/status/queue ล้มเหลว
+- เปลี่ยนกรณีอ่านแบตเตอรี่ไม่ได้ให้แสดง `--%` แทน `0%`
+- ลบ dead code หลัง `return` ใน flow วัดค่า เพื่อลดความสับสนเวลาอ่านโค้ด
 - แยก style หลักไว้ใน `carekeeper_style.py`
 - แยก provider สำหรับ mock และ real hardware ใน `carekeeper_providers.py`
 
@@ -363,8 +386,8 @@ python ble_scaner.py
 2. **ข้อมูลย้อนหลังจริงยังไม่มี GET API**
    ตอนนี้ mock แสดงได้แล้ว แต่โหมดจริงยังรอ endpoint จาก Backend
 
-3. **API key ยัง hardcode**
-   เพื่อความสะดวกในการทดสอบ ปัจจุบัน API key ยังอยู่ในโค้ด ควรย้ายไป `.env` ก่อนใช้งานจริง
+3. **API key ย้ายไป `.env` แล้ว**
+   ก่อนใช้งานจริงให้ตั้งค่า `.env` บน Raspberry Pi ให้ตรงกับ Backend จริง และไม่ควร commit ไฟล์ `.env` เข้า git
 
 4. **ควรทดสอบบน Raspberry Pi หลังแก้ UI ทุกครั้ง**
    เพราะหน้าจอมีขนาดเฉพาะ และ touchscreen/on-screen keyboard อาจแสดงผลต่างจาก Windows
@@ -374,6 +397,12 @@ python ble_scaner.py
 
 6. **เอกสาร OS setup ยังไม่อยู่ใน repo**
    ขั้นตอนปรับแต่ง Raspberry Pi 5 (raspi-config, udev, polkit, labwc autostart, Plymouth splash) ปัจจุบันอยู่ในเอกสารแยกนอก repo ควร commit runbook นี้เข้ามาเก็บไว้ใน `docs/` เพื่อให้ตั้งเครื่องใหม่ได้โดยไม่ต้องถามทีมเดิม
+
+7. **mock mode ยังใช้ queue path เดียวกับโหมดจริง**
+   ถ้ามีข้อมูลจริงค้างอยู่ใน offline queue แล้วเปิด `main_demo.py` worker ของ mock อาจ drain/delete ข้อมูลค้างได้ ช่วงทดสอบเซนเซอร์จริงควรหลีกเลี่ยงการเปิด mock mode ปนกับข้อมูลจริง หรือแยก queue path ของ mock/real ในรอบพัฒนาถัดไป
+
+8. **ยังมีความเสี่ยงเรื่องส่ง payload ซ้ำในบางจังหวะ**
+   ตอนกดบันทึก ระบบจะบันทึก payload ลง queue ก่อนแล้วจึงส่งทันที ขณะเดียวกัน `QueueDrainWorker` ก็อาจเห็น pending row เดียวกันได้ หากต้องทำ production จริงควรเพิ่มสถานะ `sending` หรือให้ทุกการส่งผ่าน queue worker ทางเดียว
 
 ## สรุปสำหรับการนำเสนอ
 

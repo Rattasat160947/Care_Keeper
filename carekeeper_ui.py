@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -213,8 +214,8 @@ class BatteryIndicator(QWidget):
         self.scale = 1.15
         self.setFixedSize(int(30 * self.scale), int(15 * self.scale))
 
-    def set_percent(self, percent: int) -> None:
-        self.percent = max(0, min(100, percent))
+    def set_percent(self, percent: int | None) -> None:
+        self.percent = 0 if percent is None else max(0, min(100, percent))
         self.update()
 
     def paintEvent(self, event) -> None:
@@ -366,6 +367,9 @@ class CareKeeperWindow(QMainWindow):
         self.status_task: ProviderTask | None = None
         self.network_task: ProviderTask | None = None
         self.bp_cooldown_seconds = 0
+        self.status_fail_count = 0
+        self.last_status_warning_ts = 0.0
+        self.last_queue_warning_ts = 0.0
 
         self.retry_notifier = RetryNotifier()
         self.retry_notifier.attempt.connect(self._on_retry_attempt)
@@ -414,6 +418,7 @@ class CareKeeperWindow(QMainWindow):
         super().closeEvent(event)
 
     def _build_toast(self) -> None:
+        self._toast_token = 0
         self.toast = ToastLabel(self)
         self.toast.setAlignment(Qt.AlignCenter)
         self.toast.setWordWrap(True)
@@ -430,19 +435,22 @@ class CareKeeperWindow(QMainWindow):
         QTimer.singleShot(duration_ms, self.popup_overlay.hide)
 
     def _show_toast(self, message: str, success: bool = True, duration_ms: int = 2000) -> None:
-        background = "#d1fae5" if success else "#fee2e2"
-        color = "#065f46" if success else "#991b1b"
-        border = "#86efac" if success else "#fecaca"
+        self._toast_token += 1
+        token = self._toast_token
+        background = "#f0fdf4" if success else "#fff1f2"
+        color = "#064e3b" if success else "#7f1d1d"
+        border = "#22c55e" if success else "#fb7185"
         self.toast.setText(message)
         self.toast.setStyleSheet(
-            f"background:{background}; color:{color}; border:1px solid {border}; "
-            "border-radius:12px; padding:10px 18px; font-size:17px; font-weight:800;"
+            f"background:{background}; color:{color}; border:3px solid {border}; "
+            "border-radius:8px; padding:14px 20px; font-size:18px; font-weight:900;"
         )
-        width = min(680, self.width() - 80)
-        self.toast.setGeometry((self.width() - width) // 2, self.height() - 92, width, 54)
+        width = min(500, max(360, self.width() - 260))
+        height = 92 if len(message) <= 48 else 118
+        self.toast.setGeometry((self.width() - width) // 2, (self.height() - height) // 2, width, height)
         self.toast.raise_()
         self.toast.show()
-        QTimer.singleShot(duration_ms, self.toast.hide)
+        QTimer.singleShot(duration_ms, lambda: self.toast.hide() if token == self._toast_token else None)
 
     def _start_task(
         self,
@@ -491,7 +499,7 @@ class CareKeeperWindow(QMainWindow):
         task = ProviderTask(self.provider.get_device_status, self)
         self.status_task = task
         task.completed.connect(self._on_status_done)
-        task.failed.connect(lambda message: None)
+        task.failed.connect(self._on_status_failed)
         task.finished.connect(lambda: self._release_task(task))
         task.start()
     def _build_numeric_keypad(self, target: QLineEdit) -> QFrame:
@@ -904,7 +912,11 @@ class CareKeeperWindow(QMainWindow):
         self._show_toast("ส่งข้อมูลที่ค้างอยู่สำเร็จแล้ว", success=True, duration_ms=2000)
 
     def _on_queue_drain_failure(self, row_id: int, error: str) -> None:
-        pass  # silent retry on next poll cycle, avoid toast spam while offline
+        now = time.monotonic()
+        if now - self.last_queue_warning_ts < 60:
+            return
+        self.last_queue_warning_ts = now
+        self._show_toast("ยังส่งข้อมูลที่ค้างอยู่ไม่ได้ ระบบจะลองใหม่อัตโนมัติ", success=False, duration_ms=2600)
 
     def _show_summary(self) -> None:
         self._refresh_values()
@@ -1024,9 +1036,10 @@ class CareKeeperWindow(QMainWindow):
     def _on_status_done(self, result: object) -> None:
         if not isinstance(result, DeviceStatus):
             return
+        self.status_fail_count = 0
 
         for bt, wifi, battery, battery_text, bt_text, wifi_text in getattr(self, "_status_widgets", []):
-            battery_text.setText(f"{result.battery_percent}%")
+            battery_text.setText("--%" if result.battery_percent is None else f"{result.battery_percent}%")
             battery.set_percent(result.battery_percent)
             wifi.set_connected(result.wifi_connected and not result.wifi_disabled)
             bt.set_connected(result.bluetooth_connected and not result.bluetooth_disabled)
@@ -1056,6 +1069,13 @@ class CareKeeperWindow(QMainWindow):
                 self.btn_card.setText("ปิดใช้งาน (กดเพื่อลองใหม่)")
             elif self.btn_card.text() == "ปิดใช้งาน (กดเพื่อลองใหม่)":
                 self.btn_card.setText("อ่านข้อมูลบัตร")
+
+    def _on_status_failed(self, message: str) -> None:
+        self.status_fail_count += 1
+        now = time.monotonic()
+        if self.status_fail_count == 1 or now - self.last_status_warning_ts >= 60:
+            self.last_status_warning_ts = now
+            self._show_toast("อ่านสถานะอุปกรณ์ไม่ได้ ระบบจะลองใหม่อัตโนมัติ", success=False, duration_ms=2400)
 
     def _read_card(self) -> None:
         if SubsystemRegistry.get("idcard").disabled:
@@ -1723,6 +1743,7 @@ class CareKeeperWindow(QMainWindow):
         self.history_cells[0][1].setText("-")
         self.btn_history.setEnabled(True)
         self.btn_history.setText("สรุปผลการวัด")
+        self._show_toast("โหลดข้อมูลย้อนหลังไม่สำเร็จ", success=False, duration_ms=2400)
 
     def _refresh_values(self) -> None:
         sys_text = self._format_int(self.vitals.systolic)
@@ -1789,11 +1810,6 @@ class CareKeeperWindow(QMainWindow):
         self._set_measure_button(self.btn_bp, "BtnNIBPBusy", "กำลังวัด\nความดัน", False)
         self._set_system_message("กำลังวัดความดันโลหิต", success=None)
         self._start_task(self.provider.measure_blood_pressure, self._on_bp_done, self._on_bp_failed)
-        return
-        self.btn_bp.setText("กำลังวัดค่า \nความดัน")
-        self.btn_bp.setEnabled(False)
-        self._set_system_message("กำลังวัดความดันโลหิต", success=None)
-        self._start_task(self.provider.measure_blood_pressure, self._on_bp_done, self._on_bp_failed)
 
     def _on_bp_done(self, result: object) -> None:
         if isinstance(result, BloodPressureReading):
@@ -1805,35 +1821,15 @@ class CareKeeperWindow(QMainWindow):
         self._set_measure_button(self.btn_bp, "BtnNIBPBusy", f"รอ\n{self.bp_cooldown_seconds} วินาที", False)
         self._set_system_message("วัดความดันโลหิตสำเร็จ", success=True)
         self._refresh_values()
-        return
-        if isinstance(result, BloodPressureReading):
-            self.vitals.systolic = result.systolic
-            self.vitals.diastolic = result.diastolic
-            self.vitals.pulse = result.pulse
-        self.bp_cooldown_seconds = 60
-        self.cooldown_timer.start(1000)
-        self.btn_bp.setText(f"รอ\n{self.bp_cooldown_seconds} \nวินาที")
-        self._set_system_message("วัดความดันโลหิตสำเร็จ", success=True)
-        self._refresh_values()
 
     def _on_bp_failed(self, message: str) -> None:
         self._set_measure_button(self.btn_bp, "BtnNIBPFail", "วัดไม่สำเร็จ\nความดัน", True)
         self._set_system_message(f"วัดความดันไม่สำเร็จ: {message}", success=False)
-        return
-        self.btn_bp.setEnabled(True)
-        self.btn_bp.setText("เริ่มวัดค่า\nความดัน")
-        self._set_system_message(f"วัดความดันไม่สำเร็จ: {message}", success=False)
-        self._show_popup(f"วัดความดันไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_spo2(self) -> None:
         if SubsystemRegistry.get("spo2").disabled:
             SubsystemRegistry.get("spo2").enable()
         self._set_measure_button(self.btn_spo2, "BtnSpO2Busy", "กำลังวัด\nออกซิเจน", False)
-        self._set_system_message("กำลังวัดออกซิเจนในเลือด", success=None)
-        self._start_task(self.provider.measure_spo2, self._on_spo2_done, self._on_spo2_failed)
-        return
-        self.btn_spo2.setText("กำลังวัดค่า\nออกซิเจน")
-        self.btn_spo2.setEnabled(False)
         self._set_system_message("กำลังวัดออกซิเจนในเลือด", success=None)
         self._start_task(self.provider.measure_spo2, self._on_spo2_done, self._on_spo2_failed)
 
@@ -1842,29 +1838,13 @@ class CareKeeperWindow(QMainWindow):
         self._set_measure_button(self.btn_spo2, "BtnSpO2Done", "วัดแล้ว\nออกซิเจน", True)
         self._set_system_message("วัดออกซิเจนในเลือดสำเร็จ", success=True)
         self._refresh_values()
-        return
-        self.vitals.spo2 = int(result)
-        self.btn_spo2.setEnabled(True)
-        self.btn_spo2.setText("เริ่มวัดค่า\nออกซิเจน")
-        self._set_system_message("วัดออกซิเจนในเลือดสำเร็จ", success=True)
-        self._refresh_values()
 
     def _on_spo2_failed(self, message: str) -> None:
         self._set_measure_button(self.btn_spo2, "BtnSpO2Fail", "วัดไม่สำเร็จ\nออกซิเจน", True)
         self._set_system_message(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False)
-        return
-        self.btn_spo2.setEnabled(True)
-        self.btn_spo2.setText("เริ่มวัดค่า\nออกซิเจน")
-        self._set_system_message(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False)
-        self._show_popup(f"วัดออกซิเจนไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _measure_temperature(self) -> None:
         self._set_measure_button(self.btn_temp, "BtnTempBusy", "กำลังวัด\nอุณหภูมิ", False)
-        self._set_system_message("กำลังวัดอุณหภูมิร่างกาย", success=None)
-        self._start_task(self.provider.measure_temperature, self._on_temperature_done, self._on_temperature_failed)
-        return
-        self.btn_temp.setText("กำลังวัดค่า\nอุณหภูมิ")
-        self.btn_temp.setEnabled(False)
         self._set_system_message("กำลังวัดอุณหภูมิร่างกาย", success=None)
         self._start_task(self.provider.measure_temperature, self._on_temperature_done, self._on_temperature_failed)
 
@@ -1873,21 +1853,10 @@ class CareKeeperWindow(QMainWindow):
         self._set_measure_button(self.btn_temp, "BtnTempDone", "วัดแล้ว\nอุณหภูมิ", True)
         self._set_system_message("วัดอุณหภูมิร่างกายสำเร็จ", success=True)
         self._refresh_values()
-        return
-        self.vitals.temperature = float(result)
-        self.btn_temp.setEnabled(True)
-        self.btn_temp.setText("เริ่มวัดค่า\nอุณหภูมิ")
-        self._set_system_message("วัดอุณหภูมิร่างกายสำเร็จ", success=True)
-        self._refresh_values()
 
     def _on_temperature_failed(self, message: str) -> None:
         self._set_measure_button(self.btn_temp, "BtnTempFail", "วัดไม่สำเร็จ\nอุณหภูมิ", True)
         self._set_system_message(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False)
-        return
-        self.btn_temp.setEnabled(True)
-        self.btn_temp.setText("เริ่มวัดค่า\nอุณหภูมิ")
-        self._set_system_message(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False)
-        self._show_popup(f"วัดอุณหภูมิไม่สำเร็จ: {message}", success=False, duration_ms=2500)
 
     def _reset_session(self) -> None:
         self.patient = PatientInfo()
@@ -1926,18 +1895,10 @@ class CareKeeperWindow(QMainWindow):
                 return
         self.cooldown_timer.stop()
         self._set_measure_button(self.btn_bp, "BtnNIBPDone", "วัดแล้ว\nความดัน", True)
-        return
-        if self.bp_cooldown_seconds > 0:
-            self.bp_cooldown_seconds -= 1
-            self.btn_bp.setText(f"รอ\n{self.bp_cooldown_seconds} \nวินาที")
-            return
-        self.cooldown_timer.stop()
-        self.btn_bp.setEnabled(True)
-        self.btn_bp.setText("เริ่มวัดค่า\nความดัน")
 
     def _submit_data(self) -> None:
         payload = {
-            "mac": getattr(self.provider, "device_mac", "11.11.11.11"),
+            "mac": getattr(self.provider, "device_mac", "unknown") or "unknown",
             "spo2": self.vitals.spo2,
             "heart_rate": self.vitals.pulse,
             "pr_bpm": self.vitals.pulse,

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 import re
 import subprocess
@@ -16,21 +17,34 @@ from typing import Callable
 from carekeeper_retry import retry_with_notify, retry_with_notify_async, SubsystemRegistry
 
 
-# ยังไม่ได้เอาใส่ .env เพราะจะได้เทสง่าย
-TEST_DEVICE_MAC = "11.11.11.11"
-TEST_BP_PORT = "/dev/ttyUSB0"
-TEST_H59_DEVICE_NAME = "H59_D105"
-TEST_H59_DEVICE_ADDRESS = "EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D"
-# POST: บันทึกผลวัด
-TEST_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/add_health"
-TEST_API_KEY_HEADER = "api-key"
-TEST_API_KEY = "test"
+PROJECT_DIR = Path(__file__).resolve().parent
 
-# รอ backend ส่ง endpoint GET history จริง
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - python-dotenv is listed in requirement.txt.
+    load_dotenv = None
+
+if load_dotenv is not None:
+    load_dotenv(PROJECT_DIR / ".env")
+
+
+def _env(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    return default if value is None else value.strip()
+
+# Keep hardware/backend values in .env instead of editing this file.
+TEST_BP_PORT = _env("CAREKEEPER_BP_PORT")
+TEST_H59_DEVICE_NAME = _env("CAREKEEPER_H59_DEVICE_NAME")
+TEST_H59_DEVICE_ADDRESS = _env("CAREKEEPER_H59_DEVICE_ADDRESS")
+# POST: บันทึกผลวัด
+TEST_API_URL = _env("CAREKEEPER_API_URL")
+TEST_API_KEY_HEADER = _env("CAREKEEPER_API_KEY_HEADER")
+TEST_API_KEY = _env("CAREKEEPER_API_KEY")
+
 # GET: ดึงประวัติผลวัด 4 รายการล่าสุดของ patient_id/cid นั้น
-TEST_HISTORY_API_URL = "https://telemed-be-maua72ti2a-as.a.run.app/api/v2/device/health_history"
-TEST_HISTORY_PATIENT_ID_PARAM = "patient_id"
-TEST_HISTORY_MAC_PARAM = "mac"
+TEST_HISTORY_API_URL = _env("CAREKEEPER_HISTORY_API_URL")
+TEST_HISTORY_PATIENT_ID_PARAM = _env("CAREKEEPER_HISTORY_PATIENT_ID_PARAM")
+TEST_HISTORY_MAC_PARAM = _env("CAREKEEPER_HISTORY_MAC_PARAM")
 
 
 def _subsystem_disabled(name: str) -> bool:
@@ -61,7 +75,7 @@ def read_device_mac() -> str:
     if node and (node >> 40) % 2 == 0:
         return ":".join(f"{(node >> shift) & 0xff:02x}" for shift in range(40, -1, -8))
 
-    return TEST_DEVICE_MAC
+    return "unknown"
 
 
 @dataclass
@@ -82,7 +96,7 @@ class BloodPressureReading:
 
 @dataclass
 class DeviceStatus:
-    battery_percent: int = 100
+    battery_percent: int | None = 100
     wifi_connected: bool = False
     bluetooth_connected: bool = False
     wifi_disabled: bool = False
@@ -411,13 +425,13 @@ class RealCareKeeperProvider(CareKeeperProvider):
 
         return records
 
-    def _read_battery_percent(self) -> int:
+    def _read_battery_percent(self) -> int | None:
         try:
             from lib.ups import UPSHat
 
             return int(UPSHat().get_battery_percent())
         except Exception:
-            return 0
+            return None
 
     def _is_wifi_connected(self) -> bool:
         if sys.platform == "win32":
