@@ -16,6 +16,12 @@ T = TypeVar("T")
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_RETRY_DELAY_SECONDS = 2.0  # linear backoff: delay * (attempt - 1)
 
+# Backoff sleeps go through these aliases so tests can neutralize them by
+# patching this module only, without touching the process-wide time/asyncio
+# modules (patching time.sleep globally breaks unrelated tests and threads).
+_sleep = time.sleep
+_async_sleep = asyncio.sleep
+
 
 @dataclass
 class SubsystemState:
@@ -110,7 +116,7 @@ def retry_with_notify(
             )
             if on_attempt:
                 on_attempt(attempt, max_attempts)
-            time.sleep(delay_seconds * (attempt - 1))
+            _sleep(delay_seconds * (attempt - 1))
 
         try:
             result = action()
@@ -153,7 +159,7 @@ async def retry_with_notify_async(
             )
             if on_attempt:
                 on_attempt(attempt, max_attempts)
-            await asyncio.sleep(delay_seconds * (attempt - 1))
+            await _async_sleep(delay_seconds * (attempt - 1))
 
         try:
             result = await action()

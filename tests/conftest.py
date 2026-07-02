@@ -24,10 +24,15 @@ def reset_subsystem_registry():
 def fast_retry_sleep(monkeypatch):
     """Provider-level retry tests don't pass delay_seconds=0 explicitly (the
     provider methods use the helper's default backoff), so neutralize the
-    real sleep here to keep the suite fast without weakening the retry-count
-    assertions, which don't depend on wall-clock time."""
-    monkeypatch.setattr(carekeeper_retry.time, "sleep", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(carekeeper_retry.asyncio, "sleep", _instant_async_sleep)
+    backoff sleeps to keep the suite fast without weakening the retry-count
+    assertions, which don't depend on wall-clock time.
+
+    Patch carekeeper_retry's module-level aliases, NOT time.sleep /
+    asyncio.sleep themselves: those are process-wide module attributes, and
+    patching them silently turns every sleep in the app and the tests into
+    a no-op (worker-thread waits, BLE keepalive loops, test timing waits)."""
+    monkeypatch.setattr(carekeeper_retry, "_sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(carekeeper_retry, "_async_sleep", _instant_async_sleep)
 
 
 @pytest.fixture
