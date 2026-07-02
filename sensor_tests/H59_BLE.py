@@ -1,5 +1,10 @@
 import asyncio
 import logging
+
+from _project_path import ensure_project_root
+
+ensure_project_root()
+
 from lib.h59_ble import H59Device, HeartRateReader, SpO2Reader
 
 logging.basicConfig(level=logging.INFO,format="%(asctime)s [%(levelname)s] %(message)s")
