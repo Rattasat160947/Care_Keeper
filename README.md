@@ -84,11 +84,12 @@ Care_Keeper/
 +-- carekeeper_logging.py     # ตั้งค่า logging กลางของระบบ และ log thread identity สำหรับ debug
 +-- requirement.txt           # รายการ Python libraries ที่ต้องติดตั้ง
 +-- requirements-dev.txt      # libraries เพิ่มเติมสำหรับรัน test (pytest, pytest-qt, pytest-mock)
-+-- idcard.py                 # ทดสอบอ่านบัตรประชาชนแบบแยกเดี่ยว
-+-- BP.py                     # ทดสอบเครื่องวัดความดันแบบแยกเดี่ยว
-+-- H59_BLE.py                # ทดสอบอุปกรณ์ SpO2 ผ่าน Bluetooth
-+-- battery.py                # ทดสอบแบตเตอรี่/UPS
-+-- ble_scaner.py             # ทดสอบค้นหา Bluetooth device
++-- sensor_tests/             # สคริปต์ทดสอบอุปกรณ์แยกเดี่ยวก่อนเปิด GUI จริง
++   +-- idcard.py             # ทดสอบอ่านบัตรประชาชน
++   +-- BP.py                 # ทดสอบเครื่องวัดความดัน
++   +-- H59_BLE.py            # ทดสอบอุปกรณ์ SpO2 ผ่าน Bluetooth
++   +-- battery.py            # ทดสอบแบตเตอรี่/UPS
++   +-- ble_scaner.py         # ทดสอบค้นหา Bluetooth device
 +-- style/                    # ฟอนต์และไฟล์ไอคอนของระบบ
 +-- lib/                      # โมดูลเชื่อมต่ออุปกรณ์จริง
 +-- conf/                     # systemd unit/timer สำหรับรันโปรแกรมแบบ kiosk บน Raspberry Pi
@@ -348,14 +349,14 @@ CAREKEEPER_H59_DEVICE_ADDRESS=EC9C2DA6-F503-4660-0ABB-3ABFA92F9E5D
 ก่อนใช้งาน GUI จริง ควรทดสอบ hardware แยกทีละส่วน
 
 ```bash
-python idcard.py
-python BP.py
-python H59_BLE.py
-python battery.py
-python ble_scaner.py
+python sensor_tests/idcard.py
+python sensor_tests/BP.py
+python sensor_tests/H59_BLE.py
+python sensor_tests/battery.py
+python sensor_tests/ble_scaner.py
 ```
 
-การทดสอบแยกเดี่ยวช่วยให้แยกปัญหาได้ง่าย เช่น ปัญหาพอร์ต serial, Bluetooth address, สิทธิ์ของผู้ใช้ หรือ driver ของเครื่องอ่านบัตร
+ให้รันคำสั่งจากโฟลเดอร์ root ของโปรเจกต์ `Care_Keeper/` เพื่อให้ path ของ `lib/` และ dependency อื่น ๆ ถูกต้อง การทดสอบแยกเดี่ยวช่วยให้แยกปัญหาได้ง่าย เช่น ปัญหาพอร์ต serial, Bluetooth address, สิทธิ์ของผู้ใช้ หรือ driver ของเครื่องอ่านบัตร
 
 ## สิ่งที่ปรับปรุงล่าสุด
 
@@ -375,6 +376,7 @@ python ble_scaner.py
 - ปรับ toast ให้เป็นกล่องแจ้งเตือนตรงกลางหน้าจอ ไม่ทับ footer และเพิ่ม feedback กรณีโหลด history/status/queue ล้มเหลว
 - เปลี่ยนกรณีอ่านแบตเตอรี่ไม่ได้ให้แสดง `--%` แทน `0%`
 - ลบ dead code หลัง `return` ใน flow วัดค่า เพื่อลดความสับสนเวลาอ่านโค้ด
+- ย้ายสคริปต์ทดสอบ sensor แยกเดี่ยวไปไว้ใน `sensor_tests/` เพื่อลดความรกของ root project
 - แยก style หลักไว้ใน `carekeeper_style.py`
 - แยก provider สำหรับ mock และ real hardware ใน `carekeeper_providers.py`
 

@@ -1,3 +1,7 @@
+from _project_path import ensure_project_root
+
+ensure_project_root()
+
 from lib.ups import UPSHat
 
 ups = UPSHat()

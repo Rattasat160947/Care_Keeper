@@ -1,3 +1,7 @@
+from _project_path import ensure_project_root
+
+ensure_project_root()
+
 from lib.bp_monitor import BPMonitor
 
 bp = BPMonitor(port="/dev/ttyUSB0")  
